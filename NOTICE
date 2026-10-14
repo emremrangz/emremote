@@ -1,0 +1,10 @@
+emremote
+Copyright 2026 The emremote contributors
+
+This product bundles Apache Guacamole guacamole-common-js 1.6.0
+(app/frontend/public/vendor/guacamole-common-js), developed at
+The Apache Software Foundation (https://www.apache.org/) and licensed under
+the Apache License, Version 2.0.
+
+The deployment uses the unmodified Apache Guacamole guacd container image
+(guacamole/guacd), PostgreSQL and Caddy, each under its own license.

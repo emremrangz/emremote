@@ -1,0 +1,40 @@
+{
+  "name": "emremote-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.1.0",
+    "@fontsource-variable/jetbrains-mono": "5.1.1",
+    "@radix-ui/react-dialog": "1.1.2",
+    "@radix-ui/react-dropdown-menu": "2.1.2",
+    "@tanstack/react-query": "5.59.16",
+    "clsx": "2.1.1",
+    "lucide-react": "0.454.0",
+    "qrcode": "1.5.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "7.18.4",
+    "simple-icons": "13.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "5.2.0",
+    "autoprefixer": "10.6.1",
+    "postcss": "8.5.28",
+    "tailwindcss": "3.4.19",
+    "typescript": "5.6.3",
+    "vite": "7.3.6",
+    "vitest": "4.1.11"
+  },
+  "packageManager": "npm@11.19.1"
+}

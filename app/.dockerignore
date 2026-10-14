@@ -1,0 +1,6 @@
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo
+backend/emremote
+**/.git
+**/.DS_Store

@@ -1,0 +1,39 @@
+# Test targets for end-to-end validation only. Ports are published on the host
+# so emremote reaches them through the LAN address, like a real device.
+#   TARGET_PASSWORD=... docker compose -f tests/targets/compose.yaml up -d --build
+#
+# "inner" is a second machine on a private network that only "target" can see.
+# It stands in for a server behind a bastion (jump host): emremote cannot reach
+# it directly, only through an SSH login on "target" (port 12222).
+name: emremote-test-targets
+services:
+  target:
+    build: .
+    environment:
+      TARGET_PASSWORD: ${TARGET_PASSWORD:?set TARGET_PASSWORD}
+    ports:
+      - "${TARGET_BIND:-0.0.0.0}:13389:3389"
+      - "${TARGET_BIND:-0.0.0.0}:15900:5900"
+      - "${TARGET_BIND:-0.0.0.0}:12222:22"
+      - "${TARGET_BIND:-0.0.0.0}:12323:23"
+    networks:
+      default: {}
+      behind:
+        ipv4_address: 172.29.77.2
+
+  inner:
+    build: .
+    environment:
+      TARGET_PASSWORD: ${TARGET_PASSWORD:?set TARGET_PASSWORD}
+    networks:
+      behind:
+        ipv4_address: 172.29.77.10
+
+networks:
+  behind:
+    # No published ports and no route out: only containers attached to it
+    # (the bastion "target" and "inner") can talk to each other.
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.77.0/24

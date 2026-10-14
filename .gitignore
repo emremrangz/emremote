@@ -1,0 +1,18 @@
+# Secrets and runtime data
+.env
+.env.*
+!.env.example
+data/
+backups/
+
+# Build output and dependencies
+app/frontend/node_modules/
+app/frontend/dist/
+app/backend/emremote
+*.tsbuildinfo
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp

@@ -1,0 +1,41 @@
+# Reverse proxy and TLS termination for emremote.
+#
+# EMREMOTE_SITE_ADDRESS: the hostname(s)/IP(s) you open in the browser,
+#   comma-separated, e.g. "emremote.home.arpa, 192.168.1.50".
+# EMREMOTE_DEFAULT_SNI: certificate name used when the browser sends no SNI
+#   (access by IP address). Set it to that IP.
+# EMREMOTE_TLS: "internal" (default) issues certificates from Caddy's own local
+#   CA — trust its root certificate on your clients (see docs/DEPLOYMENT.md).
+#   Set it to an e-mail address to use ACME (only for publicly resolvable names).
+{
+	admin off
+	# Browsers send no SNI when an IP address is typed; serve this name's
+	# certificate in that case.
+	default_sni {$EMREMOTE_DEFAULT_SNI:localhost}
+	# The local CA root is distributed manually (docs/DEPLOYMENT.md), never
+	# installed into the container's trust store.
+	skip_install_trust
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$EMREMOTE_SITE_ADDRESS:localhost} {
+	tls {$EMREMOTE_TLS:internal}
+
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
+	reverse_proxy emremote:8080 {
+		# WebSocket tunnels can be long-lived; never time them out at the proxy.
+		flush_interval -1
+		stream_close_delay 5s
+	}
+
+	# No access log: the application logs requests itself without query
+	# strings (which carry one-time tunnel tickets).
+}
