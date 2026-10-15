@@ -198,12 +198,27 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: 
 
       <div className="flex items-center gap-2 border-t border-border px-5 py-3 text-xs text-subtle">
         <span
+          title={system.data ? `Gateway ${system.data.gateway === "reachable" ? "online" : "unreachable"}` : undefined}
           className={clsx(
             "h-1.5 w-1.5 rounded-full",
             system.data?.gateway === "reachable" ? "bg-success" : system.data ? "bg-danger" : "bg-subtle",
           )}
         />
-        <span>Gateway {system.data?.gateway === "reachable" ? "online" : system.data ? "unreachable" : "…"}</span>
+        {system.data?.gateway === "unreachable" ? (
+          <span className="text-danger">Gateway unreachable</span>
+        ) : system.data?.latest_version && system.data.release_url ? (
+          <a
+            href={system.data.release_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-accent hover:underline"
+            title="Open the release notes. Update with scripts/update.sh"
+          >
+            Update available: v{system.data.latest_version}
+          </a>
+        ) : (
+          <span>{system.data ? "Up to date" : "…"}</span>
+        )}
         <span className="ml-auto font-mono">v{system.data?.version ?? ""}</span>
       </div>
       <GroupsDialog open={groupsOpen} onOpenChange={setGroupsOpen} />

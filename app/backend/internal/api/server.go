@@ -54,6 +54,7 @@ type Server struct {
 	// setupBlocked: no users, but this server was set up before (the database looks lost).
 	setupBlocked bool
 	version      string
+	latest       latestRelease
 }
 
 type Options struct {
@@ -137,6 +138,7 @@ func (s *Server) Background(ctx context.Context) {
 	audit := time.NewTicker(6 * time.Hour)
 	defer audit.Stop()
 	s.pruneAudit(ctx)
+	go s.updateLoop(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -595,6 +597,13 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	if !userFrom(r.Context()).IsAdmin() {
 		allowed, denied = []string{}, []string{} // network layout is for administrators
 	}
+	// Only administrators are told about updates; they are the ones who can install them.
+	var latestForAdmin, releaseForAdmin string
+	if userFrom(r.Context()).IsAdmin() {
+		if v, u := s.latest.get(); isNewer(v, s.version) {
+			latestForAdmin, releaseForAdmin = v, u
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version":                 s.version,
 		"gateway":                 gw,
@@ -608,6 +617,9 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"transfer_drive":          s.drive != nil,
 		"jump_enabled":            s.jumpEnabled(),
 		"donate":                  !s.cfg.HideDonate,
+		"update_check":            s.cfg.UpdateCheck,
+		"latest_version":          latestForAdmin,
+		"release_url":             releaseForAdmin,
 		"audit_retention_days":    s.cfg.AuditRetentionDays,
 		"audit_max_entries":       s.cfg.AuditMaxEntries,
 	})

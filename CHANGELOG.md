@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The sidebar footer tells administrators when a newer release exists ("Update available") instead of
+  repeating the gateway status, which is now the dot's tooltip. emremote checks GitHub's latest release
+  every 12 hours; `EMREMOTE_UPDATE_CHECK=false` turns it off.
+
 ## 0.1.2 (2026-10-15)
 
 - **Empty-database guard:** if a server that was set up before comes up with no accounts (usually a data

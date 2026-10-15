@@ -148,6 +148,10 @@ If you already run a reverse proxy (Traefik, nginx, Nginx Proxy Manager):
 
 ## Upgrading
 
+Administrators see **Update available** in the sidebar when GitHub has a newer release. emremote asks
+`api.github.com` for the latest release every 12 hours (no data about your install is sent); set
+`EMREMOTE_UPDATE_CHECK=false` to turn it off, for example on a host without internet access.
+
 Image versions are pinned in `compose.yaml` and `app/Dockerfile`.
 
 1. Back up first: `scripts/backup.sh`.

@@ -349,6 +349,9 @@ export interface SystemInfo {
   jump_enabled?: boolean;
   /** false when the operator set EMREMOTE_HIDE_DONATE. */
   donate?: boolean;
+  update_check?: boolean;
+  latest_version?: string;
+  release_url?: string;
   audit_retention_days?: number;
   audit_max_entries?: number;
 }
