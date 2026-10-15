@@ -1,4 +1,4 @@
-export type OS = "windows" | "macos" | "linux" | "other";
+export type OS = "windows" | "macos" | "linux" | "network" | "other";
 export type DeviceType = "desktop" | "laptop" | "server" | "virtual_machine" | "network" | "other";
 export type Protocol = "rdp" | "vnc" | "ssh" | "telnet";
 
@@ -100,8 +100,11 @@ export interface Virtualization {
 }
 
 export interface DeviceFacts {
-  platform?: "linux" | "macos" | "windows";
+  platform?: "linux" | "macos" | "windows" | "network";
   os?: string;
+  vendor?: string;
+  model?: string;
+  serial?: string;
   kernel?: string;
   arch?: string;
   hostname?: string;
@@ -401,7 +404,10 @@ export interface FileListing {
 
 export interface SystemInfo {
   collected_at: string;
-  platform: "linux" | "macos" | "windows";
+  platform: "linux" | "macos" | "windows" | "network";
+  vendor?: string;
+  model?: string;
+  serial?: string;
   hostname: string;
   os: string;
   kernel: string;

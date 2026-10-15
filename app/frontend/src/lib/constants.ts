@@ -4,6 +4,7 @@ export const OS_LABELS: Record<OS, string> = {
   windows: "Windows",
   macos: "macOS",
   linux: "Linux",
+  network: "Network",
   other: "Other",
 };
 
@@ -33,6 +34,7 @@ export const SUGGESTED_PROTOCOLS: Record<OS, Protocol[]> = {
   windows: ["rdp", "ssh", "vnc"],
   macos: ["vnc", "ssh"],
   linux: ["ssh", "vnc", "rdp", "telnet"],
+  network: ["ssh", "telnet"],
   other: ["ssh", "telnet", "vnc", "rdp"],
 };
 

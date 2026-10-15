@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Switches, routers and firewalls:** "Network" is now a device kind in Add device (SSH or Telnet). Over
+  SSH emremote reads the vendor, firmware, model, serial number, uptime, CPU and memory with a few fixed
+  read-only `show` commands, and shows the vendor logo. Cisco IOS/IOS XE/NX-OS, Juniper Junos, MikroTik
+  RouterOS, Huawei VRP and HPE/Aruba (ProCurve, AOS-CX) are recognised; other vendors still work for
+  terminals. These devices have no Files tab. Checked with a simulated Cisco switch and sample output
+  of the other vendors, not with real hardware of each brand.
 - GitHub button with the star count in the top bar (next to Donate) and on the sign-in and setup screens.
 
 ## 0.1.3 (2026-10-15)

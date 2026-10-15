@@ -129,7 +129,7 @@ func (req deviceRequest) validate() (*validator, store.DeviceInput) {
 		Name:        v.text("name", req.Name, true, 128, false),
 		Hostname:    v.address("hostname", req.Hostname, false),
 		Address:     v.address("address", req.Address, true),
-		OS:          v.oneOf("os", req.OS, "windows", "macos", "linux", "other"),
+		OS:          v.oneOf("os", req.OS, "windows", "macos", "linux", "network", "other"),
 		DeviceType:  v.oneOf("device_type", req.DeviceType, "desktop", "laptop", "server", "virtual_machine", "network", "other"),
 		Description: v.text("description", req.Description, false, 500, false),
 		Notes:       v.text("notes", req.Notes, false, 10000, true),

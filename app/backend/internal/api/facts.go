@@ -27,6 +27,9 @@ func (s *Server) rememberFacts(ctx context.Context, deviceID string, info *sshhe
 		"memory_bytes":   info.Memory.TotalBytes,
 		"uptime_s":       info.UptimeSeconds,
 		"mac":            info.MAC,
+		"vendor":         info.Vendor,
+		"model":          info.Model,
+		"serial":         info.Serial,
 		"virtualization": info.Virtualization,
 		"collected_at":   time.Now().UTC().Format(time.RFC3339),
 	})

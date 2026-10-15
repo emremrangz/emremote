@@ -336,6 +336,17 @@ emremote asks for the key type that the gateway's SSH library prefers (ECDSA, th
 RSA), so the pinned key is the one the gateway will be shown. Without a pin, guacd does **not**
 verify the host. The UI flags such connections as "Host key not verified".
 
+## Switches and routers (Network devices)
+
+Choose **Network** as the kind in Add device. Use SSH where the device has it (Telnet below otherwise).
+With a saved SSH sign-in, emremote reads the vendor, firmware, model, serial number, uptime, CPU and
+memory and shows them on the device page with the vendor's logo. It runs a few fixed, read-only
+`show` commands (nothing you type is ever sent) and recognises Cisco IOS, IOS XE and NX-OS, Juniper
+Junos, MikroTik RouterOS, Huawei VRP and HPE/Aruba ProCurve and AOS-CX. Other brands connect as usual
+but show no details. There is no Files tab for network devices. The commands are checked against
+sample output of each vendor; if a model prints something different, details may be partly empty.
+For old equipment see "legacy algorithms" above.
+
 ## Network devices (Telnet)
 
 Switches, routers, printers and UPS cards often offer only Telnet. emremote supports it, but Telnet

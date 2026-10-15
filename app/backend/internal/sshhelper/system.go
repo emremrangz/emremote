@@ -74,6 +74,10 @@ type SystemInfo struct {
 	DurationMS    int64     `json:"duration_ms"`
 	// Virtualization says whether the device runs on a hypervisor or in a container.
 	Virtualization *Virtualization `json:"virtualization,omitempty"`
+	// Vendor, Model and Serial are filled for network equipment (OS then holds the firmware).
+	Vendor string `json:"vendor,omitempty"`
+	Model  string `json:"model,omitempty"`
+	Serial string `json:"serial,omitempty"`
 	// MAC is the hardware address of the network card used by the default route (for Wake-on-LAN).
 	MAC string `json:"mac,omitempty"`
 }
@@ -198,6 +202,9 @@ func encodePowerShell(script string) string {
 // Inspect detects the platform and collects a snapshot. osHint is the
 // device's configured OS ("windows", "macos", "linux", "other").
 func Inspect(ctx context.Context, c *ssh.Client, osHint string) (*SystemInfo, error) {
+	if osHint == "network" {
+		return InspectNetwork(ctx, c)
+	}
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	start := time.Now()
@@ -252,6 +259,10 @@ func Inspect(ctx context.Context, c *ssh.Client, osHint string) (*SystemInfo, er
 			info, err = ParseWindows(out)
 		}
 	default:
+		// Registered as the wrong kind of device? A switch or router answers no shell command.
+		if ni, nerr := InspectNetwork(ctx, c); nerr == nil {
+			return ni, nil
+		}
 		return nil, errors.New("unsupported remote platform (Linux, macOS and Windows with PowerShell are supported)")
 	}
 	if err != nil {

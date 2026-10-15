@@ -32,8 +32,18 @@ import {
   siOpnsense,
   siOpenbsd,
   siPopos,
+  siCisco,
+  siJunipernetworks,
+  siMikrotik,
+  siHuawei,
+  siHp,
+  siUbiquiti,
+  siFortinet,
+  siTplink,
+  siNetgear,
+  siDell,
 } from "simple-icons";
-import { Boxes, HardDrive, HelpCircle } from "lucide-react";
+import { Boxes, HardDrive, HelpCircle, Network } from "lucide-react";
 import clsx from "clsx";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { OS } from "@/lib/types";
@@ -102,6 +112,17 @@ const DISTROS: { match: RegExp; icon: { path: string }; color: string; name: str
   { match: /freebsd/, icon: siFreebsd, color: "#ab2b28", name: "FreeBSD" },
   { match: /openbsd/, icon: siOpenbsd, color: "#f2ca30", name: "OpenBSD" },
   { match: /debian/, icon: siDebian, color: "#d70a53", name: "Debian" },
+  // Network equipment, picked from the firmware name (for example "Cisco IOS XE 17.6.4").
+  { match: /cisco/, icon: siCisco, color: "#049fd9", name: "Cisco" },
+  { match: /junos|juniper/, icon: siJunipernetworks, color: "#84b135", name: "Juniper" },
+  { match: /mikrotik|routeros/, icon: siMikrotik, color: "#293239", name: "MikroTik" },
+  { match: /huawei|vrp/, icon: siHuawei, color: "#cf0a2c", name: "Huawei" },
+  { match: /aruba|procurve|hpe/, icon: siHp, color: "#01a982", name: "HPE Aruba" },
+  { match: /ubiquiti|edgeos|unifi/, icon: siUbiquiti, color: "#0559c9", name: "Ubiquiti" },
+  { match: /fortinet|fortigate|fortios/, icon: siFortinet, color: "#ee3124", name: "Fortinet" },
+  { match: /tp-?link/, icon: siTplink, color: "#4acbd6", name: "TP-Link" },
+  { match: /netgear/, icon: siNetgear, color: "#9e68d0", name: "Netgear" },
+  { match: /dell/, icon: siDell, color: "#0076ce", name: "Dell" },
 ];
 
 /** Logo and name for what a device runs on (hypervisor or container runtime). */
@@ -138,12 +159,13 @@ const tint: Record<OS, string> = {
   windows: "text-[#3b9cff]",
   macos: "text-fg",
   linux: "text-fg",
+  network: "text-accent",
   other: "text-muted",
 };
 
 export function OsIcon({ os, className, boxed, distro }: { os: OS; className?: string; boxed?: boolean; /** What the device reports as its system, e.g. "Ubuntu 22.04"; picks the distribution logo. */ distro?: string }) {
   const size = clsx(className ?? "h-4 w-4", "scale-[1.15]");
-  const dist = os === "linux" || os === "other" ? distroOf(distro) : undefined;
+  const dist = os === "linux" || os === "other" || os === "network" ? distroOf(distro) : undefined;
   const icon = dist ? (
     <Brand path={dist.icon.path} className={size} />
   ) : os === "windows" ? (
@@ -152,6 +174,8 @@ export function OsIcon({ os, className, boxed, distro }: { os: OS; className?: s
     <Brand path={siApple.path} className={size} />
   ) : os === "linux" ? (
     <Brand path={siLinux.path} className={size} />
+  ) : os === "network" ? (
+    <Network className={size} />
   ) : (
     <HelpCircle className={size} />
   );

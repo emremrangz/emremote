@@ -275,7 +275,7 @@ export default function DeviceDetailPage() {
             ["activity", "Activity"],
           ] as const
         )
-          .filter(([key]) => canFiles || (key !== "system" && key !== "files"))
+          .filter(([key]) => (canFiles || (key !== "system" && key !== "files")) && !(d.os === "network" && key === "files"))
           .map(([key, label]) => (
           <button
             key={key}
@@ -292,7 +292,7 @@ export default function DeviceDetailPage() {
         ))}
       </div>
 
-      {canFiles && (tab === "system" || tab === "files") && (
+      {canFiles && (tab === "system" || (tab === "files" && d.os !== "network")) && (
         <DeviceSSHWorkspace
           key={conns.filter((c) => c.protocol === "ssh").length}
           view={tab}
@@ -410,9 +410,21 @@ export default function DeviceDetailPage() {
                 {d.hostname || <span className="text-subtle">-</span>}
                 {d.hostname && <CopyButton value={d.hostname} label="Copy hostname" />}
               </dd>
+              {d.os === "network" && facts.model && (
+                <>
+                  <dt className="text-subtle">Model</dt>
+                  <dd className="break-words font-mono text-xs">{facts.model}</dd>
+                </>
+              )}
+              {d.os === "network" && facts.serial && (
+                <>
+                  <dt className="text-subtle">Serial</dt>
+                  <dd className="break-words font-mono text-xs">{facts.serial}</dd>
+                </>
+              )}
               {facts.os && (
                 <>
-                  <dt className="text-subtle">System</dt>
+                  <dt className="text-subtle">{d.os === "network" ? "Firmware" : "System"}</dt>
                   <dd className="flex items-center gap-1.5">
                     <OsIcon os={d.os} distro={facts.os} /> <span className="min-w-0 break-words">{facts.os}</span>
                   </dd>
@@ -454,7 +466,7 @@ export default function DeviceDetailPage() {
                   <dd className="font-mono text-xs">{facts.arch}</dd>
                 </>
               )}
-              {facts.cpu_model && (
+              {facts.cpu_model && d.os !== "network" && (
                 <>
                   <dt className="text-subtle">CPU</dt>
                   <dd className="break-words text-xs">

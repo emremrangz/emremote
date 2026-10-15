@@ -1150,6 +1150,25 @@ for (const addr of ["127.0.0.1", "8.8.8.8", "169.254.169.254", "localhost"]) {
   await c.del(`/api/devices/${d.data.id}`);
 }
 
+// ---- Network equipment: a switch registered as "Network" is inspected with fixed show commands ----
+{
+  const sw = await c.post("/api/devices", { name: `e2e-switch-${stamp}`, hostname: "", address: TARGET_HOST, os: "network", device_type: "network", description: "", notes: "", tags: ["e2e"], group_id: null, favorite: false });
+  check("create a network device", sw.status === 201 && sw.data.os === "network", `status ${sw.status} os=${sw.data?.os}`);
+  const sc = await c.post(`/api/devices/${sw.data.id}/connections`, { name: "SSH", protocol: "ssh", port: 12522, username: "tester", domain: "", credential_id: null, settings: {}, secret: { mode: "set", password: TARGET_PASSWORD } });
+  const hkey = await c.post(`/api/connections/${sc.data.id}/ssh-host-key`);
+  await c.put(`/api/connections/${sc.data.id}`, { name: "SSH", protocol: "ssh", port: 12522, username: "tester", domain: "", credential_id: null, settings: { ...sc.data.settings, host_key: hkey.data?.key ?? "" }, secret: { mode: "keep" } });
+  const sa = await c.post(`/api/connections/${sc.data.id}/ssh-access`, {});
+  const si = await c.get(`/api/ssh-access/${sa.data?.id}/system`);
+  const swi = si.data?.info;
+  check("switch overview reports vendor, firmware, model, CPU and memory",
+    si.status === 200 && swi.platform === "network" && swi.vendor === "Cisco" && swi.os === "Cisco IOS XE 17.06.04" && swi.model === "C9300-48P" && swi.hostname === "lab-sw1" && swi.cpu.usage_percent === 7 && swi.memory.total_bytes === 1073741824 && swi.memory.used_bytes === 268435456 && Array.isArray(swi.disks) && swi.disks.length === 0,
+    `status ${si.status} ${JSON.stringify(swi ?? si.data).slice(0, 220)}`);
+  const swd = await c.get(`/api/devices/${sw.data.id}`);
+  check("the switch's facts are saved on the device", swd.data?.facts?.vendor === "Cisco" && swd.data.facts.model === "C9300-48P" && swd.data.facts.os === "Cisco IOS XE 17.06.04", JSON.stringify(swd.data?.facts).slice(0, 200));
+  if (sa.status === 201) await c.del(`/api/ssh-access/${sa.data.id}`);
+  await c.del(`/api/devices/${sw.data.id}`);
+}
+
 // Cross-site WebSocket hijacking: wrong Origin is rejected.
 const t2 = await c.post(`/api/connections/${vnc.data.id}/sessions`, { width: 800, height: 600, dpi: 96, image: ["image/png"], audio: [], video: [], timezone: "" });
 const evil = await wsStatus(`/api/tunnel?ticket=${encodeURIComponent(t2.data.ticket)}`, { Origin: "https://evil.example", Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") });

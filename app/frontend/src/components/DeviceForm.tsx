@@ -185,6 +185,8 @@ export function DeviceFormDialog({
 
   const setOS = (os: OS) => {
     set("os", os);
+    if (os === "network") set("device_type", "network");
+    else if (f.os === "network" && f.device_type === "network") set("device_type", "server");
     if (!editing) {
       const first = SUGGESTED_PROTOCOLS[os][0];
       setMethods({ [first]: DEFAULT_PORTS[first] });

@@ -87,12 +87,13 @@ export function SystemPanel({ accessId, username, onExpired }: { accessId: strin
   const mem = pct(info.memory.used_bytes, info.memory.total_bytes);
   const root = info.disks.find((d) => d.mount === "/" || d.mount === "/System/Volumes/Data" || d.mount === "C:") ?? info.disks[0];
   const windows = info.platform === "windows";
+  const network = info.platform === "network";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-subtle">
         <span>
-          {info.hostname} · {info.os} · {info.kernel} · {info.arch}
+          {network ? [info.hostname, info.vendor, info.model, info.os, info.serial && `S/N ${info.serial}`].filter(Boolean).join(" · ") : `${info.hostname} · ${info.os} · ${info.kernel} · ${info.arch}`}
           {info.virtualization && ` · ${info.virtualization.platform}`}
         </span>
         <span className="ml-auto">
@@ -113,7 +114,7 @@ export function SystemPanel({ accessId, username, onExpired }: { accessId: strin
           label="CPU"
           value={info.cpu.usage_percent !== null ? `${info.cpu.usage_percent.toFixed(0)}%` : "-"}
           bar={info.cpu.usage_percent ?? undefined}
-          sub={`${info.cpu.cores} cores${info.cpu.load?.length ? ` · load ${info.cpu.load.map((l) => l.toFixed(2)).join(" ")}` : ""}${info.cpu.model ? ` · ${info.cpu.model}` : ""}`}
+          sub={network ? (info.cpu.usage_percent === null ? "Not reported by this device" : "Last minute") : `${info.cpu.cores} cores${info.cpu.load?.length ? ` · load ${info.cpu.load.map((l) => l.toFixed(2)).join(" ")}` : ""}${info.cpu.model ? ` · ${info.cpu.model}` : ""}`}
         />
         <Metric
           icon={<MemoryStick className="h-4 w-4" />}
@@ -124,8 +125,11 @@ export function SystemPanel({ accessId, username, onExpired }: { accessId: strin
             </>
           }
           bar={mem}
-          sub={info.memory.swap_total_bytes ? `${windows ? "Page file" : "Swap"} ${bytes(info.memory.swap_used_bytes)} / ${bytes(info.memory.swap_total_bytes)}` : "No swap"}
+          sub={network ? undefined : info.memory.swap_total_bytes ? `${windows ? "Page file" : "Swap"} ${bytes(info.memory.swap_used_bytes)} / ${bytes(info.memory.swap_total_bytes)}` : "No swap"}
         />
+        {network ? (
+          <Metric icon={<HardDrive className="h-4 w-4" />} label="Firmware" value={<span className="text-base">{info.os || "-"}</span>} sub={info.model || undefined} />
+        ) : (
         <Metric
           icon={<HardDrive className="h-4 w-4" />}
           label={root ? `Storage ${root.mount}` : "Storage"}
@@ -141,9 +145,11 @@ export function SystemPanel({ accessId, username, onExpired }: { accessId: strin
           bar={root ? pct(root.used_bytes, root.total_bytes) : undefined}
           sub={root ? `${bytes(root.total_bytes - root.used_bytes)} free · ${info.disks.length} volume(s)` : undefined}
         />
+        )}
         <Metric icon={<Clock className="h-4 w-4" />} label="Uptime" value={uptime(info.uptime_seconds)} sub={info.uptime_seconds ? `since ${new Date(Date.now() - info.uptime_seconds * 1000).toLocaleString("en-US")}` : undefined} />
       </div>
 
+      {!network && (
       <div className="grid gap-4 xl:grid-cols-2">
         <section className="card overflow-hidden">
           <header className="border-b border-border px-4 py-2.5 text-sm font-semibold">Storage</header>
@@ -198,7 +204,9 @@ export function SystemPanel({ accessId, username, onExpired }: { accessId: strin
           </table>
         </section>
       </div>
+      )}
 
+      {!network && (
       <section className="card overflow-hidden">
         <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <h3 className="text-sm font-semibold">Recent system log</h3>
@@ -224,6 +232,7 @@ export function SystemPanel({ accessId, username, onExpired }: { accessId: strin
           </div>
         )}
       </section>
+      )}
       <p className="text-xs text-subtle">
         Read with a fixed set of read-only commands over SSH. Nothing is installed on the device and no other commands are run.
       </p>

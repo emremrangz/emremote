@@ -932,6 +932,7 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
   const fit = prefs.zoom === "fit";
   const filesAvailable =
     !quick &&
+    conn.data?.device_os !== "network" &&
     can("files.use") &&
     (protocol === "ssh" || (protocol === "rdp" && (conn.data?.settings as RDPSettings | undefined)?.enable_drive !== false));
   const layoutLabel = KEYBOARD_LAYOUTS.find((k) => k.value === keyboardLayout)?.label;
