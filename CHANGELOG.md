@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.8 (2026-10-16)
 
 - The check for a newer release (and the GitHub star count) now runs every hour instead of every 12 hours.
 
