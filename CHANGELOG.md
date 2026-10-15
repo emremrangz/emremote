@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- A Sponsor button in the top bar and a README section link to GitHub Sponsors (no bank details).
+  `EMREMOTE_HIDE_SPONSOR=true` hides the button.
+
 ## 0.1.5 (2026-10-15)
 
 - Removed the Donate button, its dialog, the `EMREMOTE_HIDE_DONATE` setting and the bank details from the

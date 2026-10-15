@@ -80,6 +80,11 @@ in `.env` (it defaults to private ranges).
 [Security](docs/SECURITY.md) · [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) ·
 [Troubleshooting](docs/TROUBLESHOOTING.md) · [Limitations](docs/LIMITATIONS.md)
 
+## Support the project
+
+If emremote is useful to you, you can support its development through
+[GitHub Sponsors](https://github.com/sponsors/emremrangz). Starring the repository helps too.
+
 ## Contributing
 
 Issues and pull requests are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems

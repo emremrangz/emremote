@@ -618,6 +618,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"transfer_drive":          s.drive != nil,
 		"jump_enabled":            s.jumpEnabled(),
 		"update_check":            s.cfg.UpdateCheck,
+		"sponsor":                 !s.cfg.HideSponsor,
 		"github_stars":            s.stars.Load(),
 		"latest_version":          latestForAdmin,
 		"release_url":             releaseForAdmin,

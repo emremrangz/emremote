@@ -51,6 +51,8 @@ type Config struct {
 
 	// UpdateCheck asks GitHub once every 12 hours whether a newer release exists (EMREMOTE_UPDATE_CHECK=false turns it off).
 	UpdateCheck bool
+	// HideSponsor removes the "Sponsor" button from the interface (EMREMOTE_HIDE_SPONSOR=true).
+	HideSponsor bool
 
 	StatusCheckInterval time.Duration
 	LogLevel            string
@@ -136,6 +138,7 @@ func Load() (*Config, error) {
 	errs = appendErr(errs, err)
 	c.JumpTargetNetworks, err = prefixes("EMREMOTE_JUMP_TARGET_NETWORKS", "")
 	errs = appendErr(errs, err)
+	c.HideSponsor = strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_HIDE_SPONSOR")), "true")
 	c.UpdateCheck = !strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_UPDATE_CHECK")), "false")
 	if c.SetupToken != "" && len(c.SetupToken) < 12 {
 		errs = append(errs, errors.New("EMREMOTE_SETUP_TOKEN must be at least 12 characters"))

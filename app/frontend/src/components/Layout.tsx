@@ -27,7 +27,7 @@ import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } fr
 import { useActiveSessions, useDevices, useGroups, useSystem } from "@/hooks/queries";
 import { GroupsDialog } from "./GroupsDialog";
 import { CommandPalette } from "./CommandPalette";
-import { GithubButton } from "./GithubButton";
+import { GithubButton, SponsorButton } from "./GithubButton";
 import { DeviceFormDialog } from "./DeviceForm";
 import { QuickConnectDialog } from "./QuickConnect";
 import { useUpdateAvailable } from "@/hooks/useUpdateCheck";
@@ -327,6 +327,7 @@ export function Layout() {
             </Link>
           )}
           <GithubButton stars={system.data?.github_stars} />
+          {system.data?.sponsor !== false && <SponsorButton />}
           <ThemeToggle />
           <UserMenu />
         </div>

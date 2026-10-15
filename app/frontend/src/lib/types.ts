@@ -351,6 +351,7 @@ export interface SystemInfo {
   secure_cookies: boolean;
   jump_enabled?: boolean;
   update_check?: boolean;
+  sponsor?: boolean;
   github_stars?: number;
   latest_version?: string;
   release_url?: string;
