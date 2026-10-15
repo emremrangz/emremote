@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.4 (2026-10-15)
 
 - **Switches, routers and firewalls:** "Network" is now a device kind in Add device (SSH or Telnet). Over
   SSH emremote reads the vendor, firmware, model, serial number, uptime, CPU and memory with a few fixed
