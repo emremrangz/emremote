@@ -346,6 +346,8 @@ export interface SystemInfo {
   session_idle_timeout_s: number;
   secure_cookies: boolean;
   jump_enabled?: boolean;
+  /** false when the operator set EMREMOTE_HIDE_DONATE. */
+  donate?: boolean;
 }
 
 export interface LoginSession {

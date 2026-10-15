@@ -11,6 +11,8 @@
 - **SSH key files:** choose or drop a `.pem`, `id_rsa` or `id_ed25519` file instead of pasting; keys are
   checked when saved (wrong passphrase, public key, PuTTY format are explained) and stored encrypted.
 - Favicon uses the white terminal icon.
+- **Donate button** in the top bar with support details; each person can hide it, and operators can
+  remove it with `EMREMOTE_HIDE_DONATE=true`.
 
 ## Before the first tag
 

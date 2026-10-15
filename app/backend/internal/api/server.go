@@ -581,5 +581,6 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"max_upload_mb":           s.cfg.MaxUploadBytes >> 20,
 		"transfer_drive":          s.drive != nil,
 		"jump_enabled":            s.jumpEnabled(),
+		"donate":                  !s.cfg.HideDonate,
 	})
 }

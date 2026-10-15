@@ -40,6 +40,9 @@ type Config struct {
 	// the first-run screen is open to anyone on a private network.
 	SetupToken string
 
+	// HideDonate removes the "Donate" button from the interface (EMREMOTE_HIDE_DONATE=true).
+	HideDonate bool
+
 	StatusCheckInterval time.Duration
 	LogLevel            string
 	MaxUploadBytes      int64
@@ -110,6 +113,7 @@ func Load() (*Config, error) {
 	errs = appendErr(errs, err)
 	c.JumpTargetNetworks, err = prefixes("EMREMOTE_JUMP_TARGET_NETWORKS", "")
 	errs = appendErr(errs, err)
+	c.HideDonate = strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_HIDE_DONATE")), "true")
 	c.SetupToken = strings.TrimSpace(os.Getenv("EMREMOTE_SETUP_TOKEN"))
 	if c.SetupToken != "" && len(c.SetupToken) < 12 {
 		errs = append(errs, errors.New("EMREMOTE_SETUP_TOKEN must be at least 12 characters"))
