@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-10-15)
 
 - **SSH key files:** choose or drop a `.pem`, `id_rsa` or `id_ed25519` file instead of pasting; keys are
   checked when saved (wrong passphrase, public key, PuTTY format are explained) and stored encrypted.
