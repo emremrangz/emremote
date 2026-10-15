@@ -34,7 +34,7 @@ jobs:
             type=raw,value=latest
       - uses: sigstore/cosign-installer@v3
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./app
           platforms: linux/amd64,linux/arm64
