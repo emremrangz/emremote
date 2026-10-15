@@ -36,13 +36,22 @@ img="$(image_ref)"
 old_id="$(docker image inspect "$img" --format '{{.Id}}' 2>/dev/null || true)"
 echo "Installed now: $(image_info "$img")"
 
+# Runs a step quietly and shows its output only when it fails.
+quiet() {
+  local log; log="$(mktemp)"
+  if "$@" >"$log" 2>&1; then rm -f "$log"; return 0; fi
+  cat "$log" >&2; rm -f "$log"; return 1
+}
+
 # 1. compose file and scripts
 if [ -d .git ]; then
-  echo "Refreshing files with git…"
+  echo "Refreshing files…"
   if ! git diff --quiet -- compose.yaml deploy scripts .env.example 2>/dev/null; then
     echo "You changed tracked files (compose.yaml, deploy/, scripts/); leaving them alone. Use compose.override.yaml for local changes."
-  else
-    git pull --ff-only
+  elif ! quiet git pull -q --ff-only; then
+    echo "Could not update the files with git. If the history of this copy has diverged from GitHub, run:" >&2
+    echo "  git fetch origin && git reset --hard origin/main" >&2
+    exit 1
   fi
 else
   echo "Refreshing files from GitHub…"
@@ -56,8 +65,8 @@ fi
 
 # 2. backup
 if [ "$backup" = 1 ]; then
-  echo "Backing up the database first…"
-  if ! ./scripts/backup.sh "${EMREMOTE_BACKUP_DIR:-./backups}"; then
+  echo "Backing up the database…"
+  if ! quiet ./scripts/backup.sh "${EMREMOTE_BACKUP_DIR:-./backups}"; then
     echo "The backup failed, so nothing was updated. Fix that, or run again with --no-backup if you accept the risk." >&2
     exit 1
   fi
@@ -66,8 +75,9 @@ else
 fi
 
 # 3. new images
-docker compose pull
-docker compose up -d --remove-orphans
+echo "Downloading and starting the new version…"
+quiet docker compose pull -q
+quiet docker compose up -d --remove-orphans
 
 # 4. wait for health
 cid="$(docker compose ps -q emremote)"
