@@ -25,9 +25,10 @@ services:
     image: guacamole/guacd:1.6.0
     user: "0:0"
     # Idempotent: after the first run the folder already belongs to uid 1000.
-    entrypoint: ["sh", "-c", "[ \"$$(stat -c %u /transfer)\" = 1000 ] || { chmod 0750 /transfer && chown 1000:1000 /transfer; }"]
+    entrypoint: ["sh", "-c", "for d in /transfer /state; do [ \"$$(stat -c %u $$d)\" = 1000 ] || { chmod 0750 $$d && chown 1000:1000 $$d; }; done"]
     volumes:
       - ${EMREMOTE_DATA_DIR:-./data}/transfer:/transfer
+      - state:/state
     network_mode: none
     healthcheck:
       disable: true
@@ -83,8 +84,10 @@ services:
       init-transfer:
         condition: service_completed_successfully
     environment:
-      EMREMOTE_DATABASE_URL: postgres://emremote:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/emremote?sslmode=disable
-      EMREMOTE_ENCRYPTION_KEY: ${EMREMOTE_ENCRYPTION_KEY:?set EMREMOTE_ENCRYPTION_KEY in .env}
+      # Each secret can instead come from a file (EMREMOTE_DATABASE_URL_FILE, EMREMOTE_ENCRYPTION_KEY_FILE,
+      # EMREMOTE_SETUP_TOKEN_FILE), for example Docker secrets; see docs/DEPLOYMENT.md.
+      EMREMOTE_DATABASE_URL: postgres://emremote:${POSTGRES_PASSWORD:-}@postgres:5432/emremote?sslmode=disable
+      EMREMOTE_ENCRYPTION_KEY: ${EMREMOTE_ENCRYPTION_KEY:-}
       EMREMOTE_GUACD_ADDR: guacd:4822
       EMREMOTE_COOKIE_SECURE: ${EMREMOTE_COOKIE_SECURE:-true}
       EMREMOTE_SESSION_TTL: ${EMREMOTE_SESSION_TTL:-12h}
@@ -101,8 +104,14 @@ services:
       EMREMOTE_JUMP_TARGET_NETWORKS: ${EMREMOTE_JUMP_TARGET_NETWORKS:-}
       EMREMOTE_SETUP_TOKEN: ${EMREMOTE_SETUP_TOKEN:-}
       EMREMOTE_HIDE_DONATE: ${EMREMOTE_HIDE_DONATE:-false}
+      EMREMOTE_AUDIT_RETENTION_DAYS: ${EMREMOTE_AUDIT_RETENTION_DAYS:-0}
+      EMREMOTE_AUDIT_MAX_ENTRIES: ${EMREMOTE_AUDIT_MAX_ENTRIES:-1000000}
+      EMREMOTE_ALLOW_EMPTY_DATABASE: ${EMREMOTE_ALLOW_EMPTY_DATABASE:-false}
+      EMREMOTE_STATE_DIR: /state
     volumes:
       - ${EMREMOTE_DATA_DIR:-./data}/transfer:/transfer
+      # A small marker that tells "the database is new" from "the database was lost".
+      - state:/state
     read_only: true
     tmpfs:
       - /tmp
@@ -147,7 +156,7 @@ services:
     environment:
       POSTGRES_USER: emremote
       POSTGRES_DB: emremote
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
     volumes:
       - ${EMREMOTE_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
@@ -165,6 +174,9 @@ services:
       resources:
         limits:
           memory: 256m
+
+volumes:
+  state:
 
 networks:
   # Browser-facing: reverse proxy <-> application.

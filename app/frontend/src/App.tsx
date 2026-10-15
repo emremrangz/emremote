@@ -16,6 +16,7 @@ import ActivityPage from "./pages/Activity";
 import SettingsPage from "./pages/Settings";
 import TransferPage from "./pages/Transfer";
 import StatisticsPage from "./pages/Statistics";
+import DataMissingPage from "./pages/DataMissing";
 import UsersPage from "./pages/Users";
 
 /** Sends people without the right back to Overview instead of showing a broken page. */
@@ -34,6 +35,7 @@ export default function App() {
   const { state } = useAuth();
   if (state.status === "loading") return <PageLoader label="Starting…" />;
   if (state.status === "setup") return <SetupPage />;
+  if (state.status === "blocked") return <DataMissingPage />;
   if (state.status === "anonymous") return <LoginPage />;
   return (
     <Routes>

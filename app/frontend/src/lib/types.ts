@@ -348,6 +348,8 @@ export interface SystemInfo {
   jump_enabled?: boolean;
   /** false when the operator set EMREMOTE_HIDE_DONATE. */
   donate?: boolean;
+  audit_retention_days?: number;
+  audit_max_entries?: number;
 }
 
 export interface LoginSession {

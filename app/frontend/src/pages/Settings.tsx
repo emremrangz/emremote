@@ -383,6 +383,10 @@ function SystemCard() {
           "Reachability checks",
           data.status_check_interval_s ? `every ${duration(data.status_check_interval_s)} (TCP connect to each configured port)` : "disabled",
         )}
+        {row(
+          "Audit log kept",
+          `${data.audit_retention_days ? `${data.audit_retention_days} days` : "no age limit"}${data.audit_max_entries ? `, at most ${data.audit_max_entries.toLocaleString("en-US")} entries` : ""}`,
+        )}
         {row("Session lifetime", `${duration(data.session_ttl_s)} max, ${duration(data.session_idle_timeout_s)} idle`)}
         {row("Secure cookies", data.secure_cookies ? <Badge tone="success">on (HTTPS)</Badge> : <Badge tone="warning">off: use HTTPS outside localhost</Badge>)}
       </dl>

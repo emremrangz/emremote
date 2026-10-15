@@ -6,6 +6,8 @@ import type { Me, Permission, User } from "./types";
 type State =
   | { status: "loading" }
   | { status: "setup"; tokenRequired: boolean }
+  /** No accounts, but this server was set up before: the database looks lost. */
+  | { status: "blocked" }
   | { status: "anonymous"; notice?: string }
   | { status: "authenticated"; user: User; expiresAt: string };
 
@@ -35,8 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       accept(await get<Me>("/api/auth/me"));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
-        const s = await get<{ setup_required: boolean; token_required?: boolean }>("/api/setup").catch(() => ({ setup_required: false, token_required: false }));
-        setState(s.setup_required ? { status: "setup", tokenRequired: !!s.token_required } : { status: "anonymous", notice: e.code === "vault_locked" ? e.message : undefined });
+        const s = await get<{ setup_required: boolean; token_required?: boolean; setup_blocked?: boolean }>("/api/setup").catch(() => ({ setup_required: false, token_required: false, setup_blocked: false }));
+        setState(s.setup_blocked ? { status: "blocked" } : s.setup_required ? { status: "setup", tokenRequired: !!s.token_required } : { status: "anonymous", notice: e.code === "vault_locked" ? e.message : undefined });
       } else {
         // Server unreachable: show login, which will surface the error on submit.
         setState({ status: "anonymous" });

@@ -72,6 +72,45 @@ refused. If the instance is reachable from outside, or you simply want a second 
 `EMREMOTE_SETUP_TOKEN` (at least 12 characters) in `.env`: the setup screen then asks for it, from
 anywhere. Create the account promptly after starting a new instance.
 
+### Secrets from files (Docker secrets)
+
+Instead of keeping the encryption key and database password in `.env`, give emremote files. Each of
+`EMREMOTE_ENCRYPTION_KEY`, `EMREMOTE_DATABASE_URL` and `EMREMOTE_SETUP_TOKEN` can be replaced by the same
+name with `_FILE` appended, which names a file whose content is the value (trailing newlines are ignored,
+and the file wins if both are set). A missing or empty file stops the start with a clear message.
+
+```yaml
+# compose.override.yaml (next to compose.yaml); .env then leaves EMREMOTE_ENCRYPTION_KEY empty
+services:
+  emremote:
+    environment:
+      EMREMOTE_ENCRYPTION_KEY_FILE: /run/secrets/emremote_key
+    secrets: [emremote_key]
+secrets:
+  emremote_key:
+    file: ./secrets/emremote_key   # chmod 600; contains the output of: openssl rand -base64 32
+```
+
+For the database, set `POSTGRES_PASSWORD_FILE` on the `postgres` service the same way and point
+`EMREMOTE_DATABASE_URL_FILE` at a file holding the full connection URL.
+
+### Audit log size
+
+The audit log is kept in the database. By default the oldest entries are removed beyond one million.
+Set `EMREMOTE_AUDIT_RETENTION_DAYS` (delete entries older than that many days, `0` = no age limit) and
+`EMREMOTE_AUDIT_MAX_ENTRIES` in `.env` to change it. Cleanup runs at start and every six hours, and
+Settings → System shows the active limits.
+
+### "The database looks empty"
+
+emremote keeps a small marker in its own Docker volume (`state`) once the first account exists. If it
+later finds no accounts but the marker is there, it does **not** offer first-time setup. It shows this
+message instead, because the likely cause is a data folder that is not mounted (for example a changed
+`EMREMOTE_DATA_DIR`, or a different folder). Otherwise anyone who reached the page could put a new
+administrator on top of an empty database. Fix the mount and run `docker compose up -d`. To start over
+on purpose, set `EMREMOTE_ALLOW_EMPTY_DATABASE=true` in `.env` and restart (remove it afterwards).
+The check is tied to the Compose project name, so it does not notice a copy installed under another name.
+
 ### Trusting the local certificate authority
 
 With `EMREMOTE_TLS=internal`, Caddy issues certificates from its own CA. That CA is created on first

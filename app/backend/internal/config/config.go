@@ -40,6 +40,15 @@ type Config struct {
 	// the first-run screen is open to anyone on a private network.
 	SetupToken string
 
+	// AuditRetentionDays deletes audit entries older than this many days (0 keeps them).
+	AuditRetentionDays int
+	// AuditMaxEntries keeps at most this many audit entries, dropping the oldest (0 = no limit).
+	AuditMaxEntries int
+	// StateDir holds a small marker that tells a new, empty database from a lost one.
+	StateDir string
+	// AllowEmptyDatabase starts first-run setup even though this server was set up before.
+	AllowEmptyDatabase bool
+
 	// HideDonate removes the "Donate" button from the interface (EMREMOTE_HIDE_DONATE=true).
 	HideDonate bool
 
@@ -53,19 +62,33 @@ type Config struct {
 func Load() (*Config, error) {
 	c := &Config{
 		ListenAddr:  env("EMREMOTE_LISTEN_ADDR", ":8080"),
-		DatabaseURL: os.Getenv("EMREMOTE_DATABASE_URL"),
 		GuacdAddr:   env("EMREMOTE_GUACD_ADDR", "guacd:4822"),
 		WebDir:      env("EMREMOTE_WEB_DIR", "/app/web"),
 		LogLevel:    env("EMREMOTE_LOG_LEVEL", "info"),
 		TransferDir: env("EMREMOTE_TRANSFER_DIR", "/transfer"),
+		StateDir:    env("EMREMOTE_STATE_DIR", "/state"),
 	}
 	var errs []error
 
+	var err error
+	if c.DatabaseURL, err = secretEnv("EMREMOTE_DATABASE_URL"); err != nil {
+		errs = append(errs, err)
+	}
+	keyText, err := secretEnv("EMREMOTE_ENCRYPTION_KEY")
+	errs = appendErr(errs, err)
+	c.SetupToken, err = secretEnv("EMREMOTE_SETUP_TOKEN")
+	errs = appendErr(errs, err)
+	c.AuditRetentionDays, err = nonNegativeInt("EMREMOTE_AUDIT_RETENTION_DAYS", 0)
+	errs = appendErr(errs, err)
+	c.AuditMaxEntries, err = nonNegativeInt("EMREMOTE_AUDIT_MAX_ENTRIES", 1_000_000)
+	errs = appendErr(errs, err)
+	c.AllowEmptyDatabase = strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_ALLOW_EMPTY_DATABASE")), "true")
+
 	if c.DatabaseURL == "" {
-		errs = append(errs, errors.New("EMREMOTE_DATABASE_URL is required"))
+		errs = append(errs, errors.New("EMREMOTE_DATABASE_URL (or EMREMOTE_DATABASE_URL_FILE) is required"))
 	}
 
-	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(os.Getenv("EMREMOTE_ENCRYPTION_KEY")))
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(keyText))
 	switch {
 	case err != nil:
 		errs = append(errs, fmt.Errorf("EMREMOTE_ENCRYPTION_KEY must be base64: %w", err))
@@ -114,7 +137,6 @@ func Load() (*Config, error) {
 	c.JumpTargetNetworks, err = prefixes("EMREMOTE_JUMP_TARGET_NETWORKS", "")
 	errs = appendErr(errs, err)
 	c.HideDonate = strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_HIDE_DONATE")), "true")
-	c.SetupToken = strings.TrimSpace(os.Getenv("EMREMOTE_SETUP_TOKEN"))
 	if c.SetupToken != "" && len(c.SetupToken) < 12 {
 		errs = append(errs, errors.New("EMREMOTE_SETUP_TOKEN must be at least 12 characters"))
 	}
@@ -190,4 +212,37 @@ func ParsePrefixes(list string) ([]netip.Prefix, error) {
 		out = append(out, p.Masked())
 	}
 	return out, nil
+}
+
+// secretEnv reads a secret from NAME, or from the file named by NAME_FILE (for Docker
+// secrets and similar, so the value need not sit in the environment or in .env).
+// When both are set the file wins. Trailing whitespace and newlines are removed.
+func secretEnv(name string) (string, error) {
+	if path := strings.TrimSpace(os.Getenv(name + "_FILE")); path != "" {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("%s_FILE: cannot read %s: %w", name, path, err)
+		}
+		if len(b) > 64<<10 {
+			return "", fmt.Errorf("%s_FILE: %s is too large", name, path)
+		}
+		v := strings.TrimSpace(string(b))
+		if v == "" {
+			return "", fmt.Errorf("%s_FILE: %s is empty", name, path)
+		}
+		return v, nil
+	}
+	return strings.TrimSpace(os.Getenv(name)), nil
+}
+
+func nonNegativeInt(name string, def int) (int, error) {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("%s must be a whole number, 0 or more", name)
+	}
+	return n, nil
 }

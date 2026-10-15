@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Empty-database guard:** if a server that was set up before comes up with no accounts (usually a data
+  folder that is not mounted), first-time setup is refused with an explanation instead of letting a stranger
+  create a new administrator. `EMREMOTE_ALLOW_EMPTY_DATABASE=true` starts over on purpose.
+- **Audit log retention:** `EMREMOTE_AUDIT_RETENTION_DAYS` and `EMREMOTE_AUDIT_MAX_ENTRIES` (default one
+  million) remove old entries every six hours.
+- **Secrets from files:** `EMREMOTE_ENCRYPTION_KEY_FILE`, `EMREMOTE_DATABASE_URL_FILE` and
+  `EMREMOTE_SETUP_TOKEN_FILE` (Docker secrets).
+- Donate button in the top bar, with a way to hide it.
+
 ## 0.1.1 (2026-10-15)
 
 - **Set up without a token:** the first page creates the administrator and signs in, in the same

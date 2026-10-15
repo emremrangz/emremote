@@ -51,7 +51,9 @@ type Server struct {
 
 	setupMu   sync.Mutex
 	setupOpen bool // true while no user exists
-	version   string
+	// setupBlocked: no users, but this server was set up before (the database looks lost).
+	setupBlocked bool
+	version      string
 }
 
 type Options struct {
@@ -92,7 +94,26 @@ func (s *Server) PrepareSetup(ctx context.Context) error {
 		return err
 	}
 	if n > 0 {
+		s.markInitialized()
 		return nil
+	}
+	if s.previouslyInitialized() {
+		if s.cfg.AllowEmptyDatabase {
+			_ = os.Remove(s.markerPath())
+			fmt.Fprintf(os.Stderr, "\nEMREMOTE_ALLOW_EMPTY_DATABASE is set: starting over with an empty database.\n\n")
+		} else {
+			s.setupMu.Lock()
+			s.setupBlocked = true
+			s.setupMu.Unlock()
+			fmt.Fprintf(os.Stderr, "\n================ emremote: database looks empty ================\n"+
+				"This server was set up before, but the database has no accounts.\n"+
+				"The data folder or database volume is probably not mounted correctly\n"+
+				"(for example a changed EMREMOTE_DATA_DIR). Nothing has been changed.\n"+
+				"First-time setup is switched off. Fix the mount and restart, or set\n"+
+				"EMREMOTE_ALLOW_EMPTY_DATABASE=true to start over on purpose.\n"+
+				"==================================================================\n\n")
+			return nil
+		}
 	}
 	s.setupMu.Lock()
 	s.setupOpen = true
@@ -113,6 +134,9 @@ func (s *Server) Background(ctx context.Context) {
 	defer t.Stop()
 	tunnels := time.NewTicker(time.Minute)
 	defer tunnels.Stop()
+	audit := time.NewTicker(6 * time.Hour)
+	defer audit.Stop()
+	s.pruneAudit(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -122,6 +146,8 @@ func (s *Server) Background(ctx context.Context) {
 			s.access.sweep()
 			s.copies.prune()
 			s.quick.sweep()
+		case <-audit.C:
+			s.pruneAudit(ctx)
 		case <-t.C:
 			if n, err := s.store.DeleteExpiredSessions(ctx, s.cfg.SessionIdle); err != nil {
 				slog.Warn("session cleanup failed", "error", err)
@@ -582,5 +608,17 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"transfer_drive":          s.drive != nil,
 		"jump_enabled":            s.jumpEnabled(),
 		"donate":                  !s.cfg.HideDonate,
+		"audit_retention_days":    s.cfg.AuditRetentionDays,
+		"audit_max_entries":       s.cfg.AuditMaxEntries,
 	})
+}
+
+// pruneAudit applies the audit log retention settings.
+func (s *Server) pruneAudit(ctx context.Context) {
+	n, err := s.store.PruneAudit(ctx, s.cfg.AuditRetentionDays, s.cfg.AuditMaxEntries)
+	if err != nil {
+		slog.Warn("audit log cleanup failed", "error", err)
+	} else if n > 0 {
+		slog.Info("removed old audit entries", "count", n, "retention_days", s.cfg.AuditRetentionDays, "max_entries", s.cfg.AuditMaxEntries)
+	}
 }

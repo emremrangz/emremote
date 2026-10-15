@@ -152,7 +152,7 @@ func (s *Server) setupPending() bool {
 }
 
 func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"setup_required": s.setupPending(), "token_required": s.cfg.SetupToken != ""})
+	writeJSON(w, http.StatusOK, map[string]bool{"setup_required": s.setupPending(), "token_required": s.cfg.SetupToken != "", "setup_blocked": s.setupIsBlocked()})
 }
 
 func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
@@ -167,6 +167,10 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	ip := s.clientIP(r)
 	if ok, wait := s.limiter.Allowed(ip, "#setup"); !ok {
 		tooMany(w, wait)
+		return
+	}
+	if s.setupIsBlocked() {
+		writeError(w, http.StatusConflict, "setup_blocked", "This server was set up before but its database is empty. Check the data folder mount (see the server log) instead of creating a new account.")
 		return
 	}
 	if !s.setupPending() {
@@ -212,6 +216,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	s.setupMu.Lock()
 	s.setupOpen = false
 	s.setupMu.Unlock()
+	s.markInitialized()
 
 	ctx := context.WithValue(r.Context(), ctxUser, user)
 	r = r.WithContext(ctx)

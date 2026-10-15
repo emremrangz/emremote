@@ -110,3 +110,24 @@ func (s *Store) ListAudit(ctx context.Context, f AuditFilter) ([]AuditEvent, int
 	}
 	return events, next, nil
 }
+
+// PruneAudit removes audit entries older than days days (0 = keep) and then the
+// oldest entries beyond max (0 = no limit). It returns how many were removed.
+func (s *Store) PruneAudit(ctx context.Context, days, max int) (int64, error) {
+	var total int64
+	if days > 0 {
+		tag, err := s.pool.Exec(ctx, `DELETE FROM audit_events WHERE occurred_at < now() - make_interval(days => $1)`, days)
+		if err != nil {
+			return total, err
+		}
+		total += tag.RowsAffected()
+	}
+	if max > 0 {
+		tag, err := s.pool.Exec(ctx, `DELETE FROM audit_events WHERE id <= (SELECT id FROM audit_events ORDER BY id DESC OFFSET $1 LIMIT 1)`, max)
+		if err != nil {
+			return total, err
+		}
+		total += tag.RowsAffected()
+	}
+	return total, nil
+}
