@@ -37,7 +37,7 @@ func (l *latestRelease) set(v, u string) {
 	l.mu.Unlock()
 }
 
-// updateLoop asks GitHub for the latest release now and then every 12 hours.
+// updateLoop asks GitHub for the latest release now and then every hour.
 // Failures (no internet, rate limit) are ignored: the interface then shows no update notice.
 func (s *Server) updateLoop(ctx context.Context) {
 	if !s.cfg.UpdateCheck {
@@ -96,7 +96,7 @@ func (s *Server) updateLoop(ctx context.Context) {
 	// After a failure (no internet, GitHub's rate limit) try again soon instead of waiting half a day.
 	next := func(ok bool) time.Duration {
 		if ok {
-			return 12 * time.Hour
+			return time.Hour
 		}
 		return 10 * time.Minute
 	}

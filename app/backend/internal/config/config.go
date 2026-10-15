@@ -49,7 +49,7 @@ type Config struct {
 	// AllowEmptyDatabase starts first-run setup even though this server was set up before.
 	AllowEmptyDatabase bool
 
-	// UpdateCheck asks GitHub once every 12 hours whether a newer release exists (EMREMOTE_UPDATE_CHECK=false turns it off).
+	// UpdateCheck asks GitHub once every hour whether a newer release exists (EMREMOTE_UPDATE_CHECK=false turns it off).
 	UpdateCheck bool
 	// HideSponsor removes the "Sponsor" button from the interface (EMREMOTE_HIDE_SPONSOR=true).
 	HideSponsor bool

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The check for a newer release (and the GitHub star count) now runs every hour instead of every 12 hours.
+
 ## 0.1.7 (2026-10-16)
 
 - `scripts/update.sh` prints short progress lines; the details of git, the backup and docker appear only when
