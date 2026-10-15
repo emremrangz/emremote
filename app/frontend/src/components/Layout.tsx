@@ -20,7 +20,6 @@ import {
   Plus,
   Search,
   Radio,
-  Heart,
 } from "lucide-react";
 import { useAccess, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
@@ -28,9 +27,7 @@ import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } fr
 import { useActiveSessions, useDevices, useGroups, useSystem } from "@/hooks/queries";
 import { GroupsDialog } from "./GroupsDialog";
 import { CommandPalette } from "./CommandPalette";
-import { DonateDialog } from "./DonateDialog";
 import { GithubButton } from "./GithubButton";
-import { useDonateHidden } from "@/lib/donate";
 import { DeviceFormDialog } from "./DeviceForm";
 import { QuickConnectDialog } from "./QuickConnect";
 import { useUpdateAvailable } from "@/hooks/useUpdateCheck";
@@ -276,10 +273,7 @@ export function Layout() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
-  const [donateOpen, setDonateOpen] = useState(false);
   const system = useSystem();
-  const [donateHidden, setDonateHidden] = useDonateHidden();
-  const showDonate = system.data?.donate !== false && !donateHidden;
   const navigate = useNavigate();
   const active = useActiveSessions();
   const loc = useLocation();
@@ -333,15 +327,6 @@ export function Layout() {
             </Link>
           )}
           <GithubButton stars={system.data?.github_stars} />
-          {showDonate && (
-            <button
-              onClick={() => setDonateOpen(true)}
-              className="mr-1 flex h-7 items-center gap-1.5 rounded-full border border-border px-2.5 text-xs font-medium text-muted transition-colors hover:border-border-strong hover:text-fg"
-              title="Support emremote"
-            >
-              <Heart className="h-3.5 w-3.5 text-danger" /> <span className="hidden sm:inline">Donate</span>
-            </button>
-          )}
           <ThemeToggle />
           <UserMenu />
         </div>
@@ -381,14 +366,6 @@ export function Layout() {
       />
       <DeviceFormDialog open={addOpen} onOpenChange={setAddOpen} onSaved={(d) => navigate(`/devices/${d.id}`)} />
       <QuickConnectDialog open={quickOpen} onOpenChange={setQuickOpen} />
-      <DonateDialog
-        open={donateOpen}
-        onOpenChange={setDonateOpen}
-        onHide={() => {
-          setDonateHidden(true);
-          setDonateOpen(false);
-        }}
-      />
     </div>
   );
 }

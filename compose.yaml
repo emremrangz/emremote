@@ -71,7 +71,7 @@ services:
     build:
       context: ./app
       args:
-        EMREMOTE_VERSION: ${EMREMOTE_VERSION:-0.1.4}
+        EMREMOTE_VERSION: ${EMREMOTE_VERSION:-0.1.5}
     # Pulled from the registry by default ("docker compose pull"); "docker compose build" builds it locally instead.
     image: ghcr.io/emremrangz/emremote:${EMREMOTE_IMAGE_TAG:-latest}
     # Same uid as guacd, so both can manage files in the RDP transfer drive.
@@ -103,7 +103,6 @@ services:
       EMREMOTE_AUTO_SSH_PORT: ${EMREMOTE_AUTO_SSH_PORT:-22}
       EMREMOTE_JUMP_TARGET_NETWORKS: ${EMREMOTE_JUMP_TARGET_NETWORKS:-}
       EMREMOTE_SETUP_TOKEN: ${EMREMOTE_SETUP_TOKEN:-}
-      EMREMOTE_HIDE_DONATE: ${EMREMOTE_HIDE_DONATE:-false}
       EMREMOTE_UPDATE_CHECK: ${EMREMOTE_UPDATE_CHECK:-true}
       EMREMOTE_AUDIT_RETENTION_DAYS: ${EMREMOTE_AUDIT_RETENTION_DAYS:-0}
       EMREMOTE_AUDIT_MAX_ENTRIES: ${EMREMOTE_AUDIT_MAX_ENTRIES:-1000000}

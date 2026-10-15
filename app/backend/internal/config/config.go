@@ -49,8 +49,6 @@ type Config struct {
 	// AllowEmptyDatabase starts first-run setup even though this server was set up before.
 	AllowEmptyDatabase bool
 
-	// HideDonate removes the "Donate" button from the interface (EMREMOTE_HIDE_DONATE=true).
-	HideDonate bool
 	// UpdateCheck asks GitHub once every 12 hours whether a newer release exists (EMREMOTE_UPDATE_CHECK=false turns it off).
 	UpdateCheck bool
 
@@ -138,7 +136,6 @@ func Load() (*Config, error) {
 	errs = appendErr(errs, err)
 	c.JumpTargetNetworks, err = prefixes("EMREMOTE_JUMP_TARGET_NETWORKS", "")
 	errs = appendErr(errs, err)
-	c.HideDonate = strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_HIDE_DONATE")), "true")
 	c.UpdateCheck = !strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_UPDATE_CHECK")), "false")
 	if c.SetupToken != "" && len(c.SetupToken) < 12 {
 		errs = append(errs, errors.New("EMREMOTE_SETUP_TOKEN must be at least 12 characters"))

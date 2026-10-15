@@ -4,7 +4,7 @@ import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare,
 import clsx from "clsx";
 import { PageHeader, Badge, ErrorState } from "@/components/ui/misc";
 import { Button } from "@/components/ui/Button";
-import { Field, Switch } from "@/components/ui/Field";
+import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
 import { TERMINAL_FONTS, TERMINAL_THEMES, DEFAULT_SSH } from "@/lib/constants";
 import { loadTerminalPrefs, saveTerminalPrefs, type TerminalPrefs } from "@/lib/terminalPrefs";
@@ -14,7 +14,6 @@ import { useActiveSessions, useLoginSessions, useSystem, keys } from "@/hooks/qu
 import { ApiError, del, errorMessage, get, post, put } from "@/lib/api";
 import { useAuth, useAccess } from "@/lib/auth";
 import { useTheme, type ThemePref } from "@/lib/theme";
-import { useDonateHidden } from "@/lib/donate";
 import { dateTime, duration, relativeTime } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { ProtocolBadge } from "@/components/Status";
@@ -397,8 +396,6 @@ function SystemCard() {
 export default function SettingsPage() {
   const { state } = useAuth();
   const [theme, setTheme] = useTheme();
-  const system = useSystem();
-  const [donateHidden, setDonateHidden] = useDonateHidden();
   const user = state.status === "authenticated" ? state.user : null;
   const { isAdmin } = useAccess();
   return (
@@ -427,11 +424,6 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
-                  {system.data?.donate !== false && (
-            <div className="mt-4 max-w-sm border-t border-border pt-4">
-              <Switch checked={!donateHidden} onChange={(v) => setDonateHidden(!v)} label="Show the Donate button" description="In the top bar, in this browser." />
-            </div>
-          )}
         </Card>
         <TerminalCard />
         {isAdmin && <JumpHostCard />}

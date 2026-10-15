@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5 (2026-10-15)
+
+- Removed the Donate button, its dialog, the `EMREMOTE_HIDE_DONATE` setting and the bank details from the
+  README. Screenshots show the current interface.
+
 ## 0.1.4 (2026-10-15)
 
 - **Switches, routers and firewalls:** "Network" is now a device kind in Add device (SSH or Telnet). Over
@@ -10,7 +15,7 @@
   of the other vendors, not with real hardware of each brand.
 - A new installation starts with three shared groups: Workstations, Servers and Network. Existing
   installations are not changed.
-- GitHub button with the star count in the top bar (next to Donate) and on the sign-in and setup screens.
+- GitHub button with the star count in the top bar and on the sign-in and setup screens.
 
 ## 0.1.3 (2026-10-15)
 
