@@ -12,7 +12,7 @@ COPY frontend/ ./
 RUN npm run typecheck && npm test && npx vite build
 
 # ---- API server ----
-FROM --platform=$BUILDPLATFORM golang:1.26.9-alpine3.24 AS api
+FROM --platform=$BUILDPLATFORM golang:1.27.2-alpine3.24 AS api
 WORKDIR /src
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
