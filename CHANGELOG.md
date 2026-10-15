@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6 (2026-10-15)
 
 - A Sponsor button in the top bar and a README section link to GitHub Sponsors (no bank details).
   `EMREMOTE_HIDE_SPONSOR=true` hides the button.
