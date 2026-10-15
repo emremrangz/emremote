@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 (2026-10-15)
 
 - The sidebar footer tells administrators when a newer release exists ("Update available") instead of
   repeating the gateway status, which is now the dot's tooltip. emremote checks GitHub's latest release
