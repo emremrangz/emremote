@@ -2,19 +2,22 @@
 
 ## 0.1.1 (2026-10-15)
 
+- **Set up without a token:** the first page creates the administrator and signs in, in the same
+  terminal-style window as the sign-in screen. Setup is limited to private-network addresses, or
+  protected by an optional `EMREMOTE_SETUP_TOKEN`.
+- **Published images and one-step install:** `docker compose pull && docker compose up -d`
+  (amd64 and arm64, from the GitHub Container Registry on every `v*` tag), `scripts/install.sh` and
+  `scripts/init-env.sh`, which also picks free ports when 80 and 443 are taken.
 - **SSH key files:** choose or drop a `.pem`, `id_rsa` or `id_ed25519` file instead of pasting; keys are
   checked when saved (wrong passphrase, public key, PuTTY format are explained) and stored encrypted.
+- Favicon uses the white terminal icon.
 
-- **First run without a token:** the first page creates the administrator and signs in. Setup is
-  limited to private-network addresses, or protected by an optional `EMREMOTE_SETUP_TOKEN`.
-- **Published images:** `docker compose pull && docker compose up -d` (amd64 and arm64, from the
-  GitHub Container Registry on every `v*` tag); `scripts/install.sh` and `scripts/init-env.sh`.
+## Before the first tag
 
 - **Session sharing:** a view-only link to a live session, with a viewer count, revocation and audit.
 - **Wake-on-LAN:** MAC address per device (learned over SSH), Wake button, audited and rate limited.
 - **RDP:** printing to PDF, microphone, RemoteApp, Hyper-V VMConnect (VM name or id).
 - **SSH:** Backspace code and locale settings.
-
 - **Workspace:** all sessions open as tabs in one window, with one, two (side by side or stacked) or
   four panes; hidden sessions stay connected and the keyboard follows the active pane.
 - **Jump hosts:** reach devices that only a bastion can see (RDP, VNC, SSH, Telnet, files, system
