@@ -283,7 +283,7 @@ func (s *Server) dialBastion(ctx context.Context, r *http.Request, c *store.Conn
 	if err != nil {
 		return nil, zero, err
 	}
-	client, err := sshhelper.Dial(ctx, sshhelper.Target{Addr: baddr, Port: b.Port, Username: user, Secret: material, HostKey: bs.HostKey})
+	client, err := sshhelper.Dial(ctx, sshhelper.Target{Addr: baddr, Port: b.Port, Username: user, Secret: material, HostKey: bs.HostKey, Legacy: bs.AllowLegacyAlgorithms})
 	if err != nil {
 		return nil, zero, err
 	}

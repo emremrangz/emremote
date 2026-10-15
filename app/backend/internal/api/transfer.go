@@ -225,7 +225,7 @@ func (s *Server) handleAutoSSH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn.Close()
-	key, err := sshkey.Fetch(ctx, addr, port)
+	key, err := sshkey.Fetch(ctx, addr, port, false)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "closed"})
 		return

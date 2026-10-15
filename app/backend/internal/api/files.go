@@ -214,7 +214,7 @@ func (s *Server) handleOpenSSHAccess(w http.ResponseWriter, r *http.Request) {
 		material = secrets.Material{Password: req.Password}
 	}
 	targetName := c.DeviceName + " / " + c.Name
-	client, err := sshhelper.Dial(r.Context(), sshhelper.Target{Addr: tgt.Addr, Port: tgt.Port, Username: username, Secret: material, HostKey: settings.HostKey, Via: tgt.Via})
+	client, err := sshhelper.Dial(r.Context(), sshhelper.Target{Addr: tgt.Addr, Port: tgt.Port, Username: username, Secret: material, HostKey: settings.HostKey, Via: tgt.Via, Legacy: settings.AllowLegacyAlgorithms})
 	if err != nil {
 		code, status := "ssh_failed", http.StatusBadGateway
 		msg := "Could not connect over SSH: " + err.Error()

@@ -46,7 +46,7 @@ docker compose ps                    # all services "healthy"
 ```
 
 To build the image yourself instead of pulling it (for development): `docker compose build && docker compose up -d`.
-To update: `docker compose pull && docker compose up -d`. Pin a version with `EMREMOTE_IMAGE_TAG=0.1.0` in `.env`.
+To update: run `scripts/update.sh` (works from any folder: backs up the database, pulls the images, restarts and checks health; `--no-backup` skips the backup). By hand: `docker compose pull && docker compose up -d` inside the install folder. Pin a version with `EMREMOTE_IMAGE_TAG=0.1.0` in `.env`.
 
 Required `.env` values:
 

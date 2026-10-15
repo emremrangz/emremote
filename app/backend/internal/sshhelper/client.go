@@ -72,6 +72,20 @@ type Target struct {
 	HostKey  string // pinned "type base64"
 	// Via, when set, is a logged-in bastion; the connection to Addr goes through it.
 	Via *ssh.Client
+	// Legacy also offers the key exchange, cipher, MAC and host key algorithms
+	// that x/crypto considers weak (diffie-hellman-group1-sha1, aes-cbc, hmac-sha1,
+	// ssh-dss ...), for old switches and routers. The host key must still be pinned.
+	Legacy bool
+}
+
+// ApplyLegacy adds the weak algorithms to cfg after the modern ones, so modern
+// servers still negotiate the strongest option and only old ones fall back.
+func ApplyLegacy(cfg *ssh.ClientConfig) {
+	weak := ssh.InsecureAlgorithms()
+	strong := ssh.SupportedAlgorithms()
+	cfg.KeyExchanges = append(strong.KeyExchanges, weak.KeyExchanges...)
+	cfg.Ciphers = append(strong.Ciphers, weak.Ciphers...)
+	cfg.MACs = append(strong.MACs, weak.MACs...)
 }
 
 // Dial connects and authenticates. Password, keyboard-interactive (answering
@@ -133,6 +147,10 @@ func Dial(ctx context.Context, t Target) (*ssh.Client, error) {
 			return nil
 		},
 		Timeout: 10 * time.Second,
+	}
+	if t.Legacy {
+		ApplyLegacy(cfg)
+		cfg.HostKeyAlgorithms = append(cfg.HostKeyAlgorithms, ssh.InsecureAlgorithms().HostKeys...)
 	}
 	var d net.Dialer
 	dctx, cancel := context.WithTimeout(ctx, 10*time.Second)

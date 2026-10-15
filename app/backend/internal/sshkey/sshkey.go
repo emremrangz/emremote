@@ -13,6 +13,8 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/ssh"
+
+	"github.com/emremrangz/emremote/internal/sshhelper"
 )
 
 type HostKey struct {
@@ -34,16 +36,16 @@ var HostKeyAlgorithms = []string{
 
 // Fetch performs an SSH key exchange with addr:port and returns the host key.
 // No authentication is attempted.
-func Fetch(ctx context.Context, addr netip.Addr, port int) (*HostKey, error) {
+func Fetch(ctx context.Context, addr netip.Addr, port int, legacy bool) (*HostKey, error) {
 	var d net.Dialer
-	return FetchVia(ctx, d.DialContext, addr, port)
+	return FetchVia(ctx, d.DialContext, addr, port, legacy)
 }
 
 // DialFunc opens a connection; it lets a fetch run through a jump host.
 type DialFunc func(ctx context.Context, network, address string) (net.Conn, error)
 
 // FetchVia is Fetch with a custom way of reaching the server.
-func FetchVia(ctx context.Context, dial DialFunc, addr netip.Addr, port int) (*HostKey, error) {
+func FetchVia(ctx context.Context, dial DialFunc, addr netip.Addr, port int, legacy bool) (*HostKey, error) {
 	conn, err := dial(ctx, "tcp", net.JoinHostPort(addr.String(), strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
@@ -61,6 +63,9 @@ func FetchVia(ctx context.Context, dial DialFunc, addr netip.Addr, port int) (*H
 			return errCaptured
 		},
 	}
+	if legacy {
+		legacyAlgorithms(cfg)
+	}
 	_, _, _, err = ssh.NewClientConn(conn, conn.RemoteAddr().String(), cfg)
 	if captured == nil {
 		if err == nil {
@@ -74,4 +79,10 @@ func FetchVia(ctx context.Context, dial DialFunc, addr netip.Addr, port int) (*H
 		Key:         captured.Type() + " " + base64.StdEncoding.EncodeToString(captured.Marshal()),
 		Fingerprint: "SHA256:" + strings.TrimRight(base64.StdEncoding.EncodeToString(sum[:]), "="),
 	}, nil
+}
+
+// legacyAlgorithms offers the weak algorithms after the modern ones, like sshhelper.ApplyLegacy.
+func legacyAlgorithms(cfg *ssh.ClientConfig) {
+	sshhelper.ApplyLegacy(cfg)
+	cfg.HostKeyAlgorithms = append(append([]string{}, cfg.HostKeyAlgorithms...), ssh.InsecureAlgorithms().HostKeys...)
 }

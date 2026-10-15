@@ -352,7 +352,9 @@ func (s *Server) handleFetchSSHHostKey(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	key, err := sshkey.Fetch(ctx, addr, c.Port)
+	var hs SSHSettings
+	_ = decodeSettings(c.Settings, &hs)
+	key, err := sshkey.Fetch(ctx, addr, c.Port, hs.AllowLegacyAlgorithms)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "host_key_unavailable", "Could not retrieve host key: "+err.Error())
 		return

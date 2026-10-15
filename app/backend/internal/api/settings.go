@@ -71,14 +71,17 @@ type VNCSettings struct {
 
 type SSHSettings struct {
 	// JumpConnectionID, when set, names the SSH connection to reach this target through.
-	JumpConnectionID    string `json:"jump_connection_id"`
-	HostKey             string `json:"host_key"`
-	FontName            string `json:"font_name"`
-	FontSize            int    `json:"font_size"`
-	ColorScheme         string `json:"color_scheme"`
-	Scrollback          int    `json:"scrollback"`
-	TerminalType        string `json:"terminal_type"`
-	ServerAliveInterval int    `json:"server_alive_interval"`
+	JumpConnectionID string `json:"jump_connection_id"`
+	HostKey          string `json:"host_key"`
+	// AllowLegacyAlgorithms lets emremote's own SSH client (files, system overview, jump host,
+	// host key lookup) use old key exchange, cipher, MAC and host key algorithms.
+	AllowLegacyAlgorithms bool   `json:"allow_legacy_algorithms"`
+	FontName              string `json:"font_name"`
+	FontSize              int    `json:"font_size"`
+	ColorScheme           string `json:"color_scheme"`
+	Scrollback            int    `json:"scrollback"`
+	TerminalType          string `json:"terminal_type"`
+	ServerAliveInterval   int    `json:"server_alive_interval"`
 	// Backspace is the code the Backspace key sends: 127 (DEL) or 8 (BS).
 	Backspace int `json:"backspace"`
 	// Locale for the remote shell, for example en_US.UTF-8 ("" = server default).

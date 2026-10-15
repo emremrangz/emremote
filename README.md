@@ -65,8 +65,7 @@ in `.env` (it defaults to private ranges).
 **Update:**
 
 ```bash
-cd ~/emremote && git pull                       # latest compose file and scripts
-docker compose pull && docker compose up -d     # latest images
+~/emremote/scripts/update.sh                    # backup, pull, restart, health check; run it from any folder
 ```
 
 **Back up:** `scripts/backup.sh`.

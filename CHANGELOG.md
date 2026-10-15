@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 (2026-10-15)
 
 - **Empty-database guard:** if a server that was set up before comes up with no accounts (usually a data
   folder that is not mounted), first-time setup is refused with an explanation instead of letting a stranger
@@ -10,6 +10,11 @@
 - **Secrets from files:** `EMREMOTE_ENCRYPTION_KEY_FILE`, `EMREMOTE_DATABASE_URL_FILE` and
   `EMREMOTE_SETUP_TOKEN_FILE` (Docker secrets).
 - Donate button in the top bar, with a way to hide it.
+- SSH connections: "Allow legacy algorithms" lets emremote's own SSH client (files, system overview, jump
+  host, host key lookup) talk to old switches and routers; modern algorithms are still preferred.
+- `scripts/update.sh`: backup, pull, restart and health check in one command, from any folder.
+- Release images carry build provenance and an SBOM and are signed with cosign (keyless). CI runs
+  govulncheck, `npm audit` for production dependencies and CodeQL, and Dependabot watches dependencies.
 
 ## 0.1.1 (2026-10-15)
 

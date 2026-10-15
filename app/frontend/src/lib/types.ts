@@ -179,6 +179,7 @@ export interface SSHSettings {
   /** SSH connection to reach this target through (jump host); empty for a direct connection. */
   jump_connection_id: string;
   host_key: string;
+  allow_legacy_algorithms: boolean;
   font_name: string;
   font_size: number;
   color_scheme: string;

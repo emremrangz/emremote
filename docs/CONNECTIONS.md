@@ -311,6 +311,14 @@ your account, that are typed into the session as if you had typed them.
 - Imports land in your own scope: administrators add to the shared inventory, members to their private
   inventory. Add passwords afterwards. At most 2000 devices and 4 MB per import.
 
+## Old switches and routers (legacy algorithms)
+
+Browser terminals run inside guacd, which already speaks older SSH dialects. emremote's own SSH client
+(file manager, system overview, jump host, host key lookup) only offers modern algorithms by default. For
+equipment that still needs `diffie-hellman-group1-sha1`, CBC ciphers, `hmac-sha1` or `ssh-dss`, switch on
+**Allow legacy algorithms** in the SSH connection's Host key tab. Modern algorithms are still tried first,
+and the host key stays pinned. Use it only for devices you cannot update.
+
 ## SSH host keys (automatic)
 
 As with any SSH client, the host key is recorded automatically on the first connection, and a

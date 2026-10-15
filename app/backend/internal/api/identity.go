@@ -49,7 +49,7 @@ func (s *Server) pinIdentity(r *http.Request, c *store.Connection, addr netip.Ad
 		if hk, _ := settings["host_key"].(string); hk != "" {
 			return false
 		}
-		key, err := sshkey.FetchVia(ctx, dial, addr, c.Port)
+		key, err := sshkey.FetchVia(ctx, dial, addr, c.Port, settings["allow_legacy_algorithms"] == true)
 		if err != nil {
 			slog.Info("could not record SSH host key", "connection", c.ID, "error", err)
 			return false

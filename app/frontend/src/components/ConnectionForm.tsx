@@ -891,6 +891,12 @@ function SshHostKeyPanel({
       <Field label="Pinned host key" optional error={error} hint='Format: "ssh-ed25519 AAAA…"'>
         <textarea className="input min-h-[60px] font-mono text-2xs" value={settings.host_key} onChange={(e) => onChange({ host_key: e.target.value })} spellCheck={false} />
       </Field>
+      <Switch
+        checked={settings.allow_legacy_algorithms}
+        onChange={(v) => onChange({ allow_legacy_algorithms: v })}
+        label="Allow legacy algorithms"
+        description="For old switches and routers. emremote's own SSH client (files, system overview, jump host, host key lookup) then also accepts weak key exchange, ciphers and MACs such as diffie-hellman-group1-sha1 and aes-cbc. The host key stays pinned. The terminal itself is not affected."
+      />
     </div>
   );
 }

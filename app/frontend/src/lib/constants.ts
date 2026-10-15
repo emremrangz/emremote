@@ -111,6 +111,7 @@ export const DEFAULT_VNC: VNCSettings = {
 export const DEFAULT_SSH: SSHSettings = {
   jump_connection_id: "",
   host_key: "",
+  allow_legacy_algorithms: false,
   font_name: "monospace",
   font_size: 12,
   color_scheme: "gray-black",

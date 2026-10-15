@@ -125,6 +125,16 @@ Events are stored in PostgreSQL and cannot be edited through the UI.
 - [ ] The host's firewall allows only 443 (and optionally 80) from client networks.
 - [ ] Remote access from outside the LAN goes through a VPN.
 
+## Verifying a release image
+
+Release images are signed with cosign (keyless, GitHub Actions identity) and published with provenance and an SBOM:
+
+```
+cosign verify ghcr.io/emremrangz/emremote:0.1.2 \
+  --certificate-identity-regexp 'https://github.com/emremrangz/emremote/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Reporting vulnerabilities
 
 Please report security problems privately to the maintainers rather than opening a public issue.
