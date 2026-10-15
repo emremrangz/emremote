@@ -64,12 +64,15 @@ func (s *Server) updateLoop(ctx context.Context) {
 		}
 		return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out) == nil
 	}
-	check := func() {
+	check := func() bool {
+		ok := true
 		var repo struct {
 			Stars int `json:"stargazers_count"`
 		}
 		if get(repoURL, &repo) && repo.Stars >= 0 {
 			s.stars.Store(int64(repo.Stars))
+		} else {
+			ok = false
 		}
 		var rel struct {
 			Tag   string `json:"tag_name"`
@@ -77,24 +80,34 @@ func (s *Server) updateLoop(ctx context.Context) {
 			Draft bool   `json:"draft"`
 			Pre   bool   `json:"prerelease"`
 		}
-		if !get(releaseURL, &rel) || rel.Draft || rel.Pre {
-			return
+		if !get(releaseURL, &rel) {
+			return false
+		}
+		if rel.Draft || rel.Pre {
+			return ok
 		}
 		v := strings.TrimPrefix(rel.Tag, "v")
-		if _, ok := parseSemver(v); !ok || !strings.HasPrefix(rel.URL, "https://github.com/emremrangz/emremote/") {
-			return
+		if _, valid := parseSemver(v); !valid || !strings.HasPrefix(rel.URL, "https://github.com/emremrangz/emremote/") {
+			return ok
 		}
 		s.latest.set(v, rel.URL)
+		return ok
 	}
-	check()
-	t := time.NewTicker(12 * time.Hour)
-	defer t.Stop()
+	// After a failure (no internet, GitHub's rate limit) try again soon instead of waiting half a day.
+	next := func(ok bool) time.Duration {
+		if ok {
+			return 12 * time.Hour
+		}
+		return 10 * time.Minute
+	}
+	timer := time.NewTimer(next(check()))
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
-			check()
+		case <-timer.C:
+			timer.Reset(next(check()))
 		}
 	}
 }
