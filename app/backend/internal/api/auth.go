@@ -217,6 +217,16 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 	s.setupOpen = false
 	s.setupMu.Unlock()
 	s.markInitialized()
+	// A new installation starts with the usual shared groups; rename or delete them freely.
+	for _, g := range []struct{ name, desc string }{
+		{"Workstations", "Desktops and laptops"},
+		{"Servers", "Physical and virtual servers"},
+		{"Network", "Switches, routers and firewalls"},
+	} {
+		if _, err := s.store.CreateGroup(r.Context(), nil, g.name, g.desc); err != nil {
+			slog.Warn("could not create a default group", "group", g.name, "error", err)
+		}
+	}
 
 	ctx := context.WithValue(r.Context(), ctxUser, user)
 	r = r.WithContext(ctx)

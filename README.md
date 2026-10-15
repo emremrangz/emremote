@@ -11,8 +11,9 @@ Open RDP, VNC, SSH and Telnet sessions in a browser tab, with no agent installed
 | | |
 |---|---|
 | ![Overview](docs/images/overview.png)<br>**Overview**: reachability, live sessions and recent activity | ![Devices](docs/images/devices.png)<br>**Devices**: groups, tags, search and one-click connect |
-| ![Device page](docs/images/device.png)<br>**Device page**: system, hardware and hypervisor read over SSH | ![Workspace](docs/images/workspace.png)<br>**Workspace**: sessions as tabs, one to four panes |
-| ![Statistics](docs/images/statistics.png)<br>**Statistics**: usage by day and hour, fleet and security | ![Terminal themes](docs/images/terminal-themes.png)<br>**Terminal themes** with a live preview |
+| ![Device page](docs/images/device.png)<br>**Switches and routers**: vendor, firmware, model and serial read over SSH | ![Workspace](docs/images/workspace.png)<br>**Workspace**: sessions as tabs, one to four panes |
+| ![Statistics](docs/images/statistics.png)<br>**Statistics**: usage by day and hour, fleet and security | ![Activity log](docs/images/activity.png)<br>**Activity log**: every sign-in, session and file transfer |
+| ![Switch health](docs/images/switch-system.png)<br>**Switch health**: CPU, memory, firmware and uptime | ![Terminal themes](docs/images/terminal-themes.png)<br>**Terminal themes** with a live preview |
 | ![Search](docs/images/search.png)<br>**Ctrl/⌘ K**: find devices and run quick actions | ![Sign-in](docs/images/login.png)<br>**Sign-in** as a terminal |
 
 ## Features

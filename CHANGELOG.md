@@ -8,6 +8,8 @@
   RouterOS, Huawei VRP and HPE/Aruba (ProCurve, AOS-CX) are recognised; other vendors still work for
   terminals. These devices have no Files tab. Checked with a simulated Cisco switch and sample output
   of the other vendors, not with real hardware of each brand.
+- A new installation starts with three shared groups: Workstations, Servers and Network. Existing
+  installations are not changed.
 - GitHub button with the star count in the top bar (next to Donate) and on the sign-in and setup screens.
 
 ## 0.1.3 (2026-10-15)
