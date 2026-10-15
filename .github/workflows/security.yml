@@ -18,6 +18,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: app/backend/go.mod
+          check-latest: true
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: govulncheck ./...
         working-directory: app/backend
@@ -40,7 +41,8 @@ jobs:
       security-events: write
     strategy:
       matrix:
-        language: [go, javascript-typescript]
+        # Go is covered by govulncheck above.
+        language: [javascript-typescript]
     steps:
       - uses: actions/checkout@v4
       - uses: github/codeql-action/init@v3
