@@ -1,5 +1,6 @@
 import type { FormEvent, MouseEvent, ReactNode } from "react";
 import clsx from "clsx";
+import { Github } from "lucide-react";
 
 /** The terminal window used by the sign-in and first-run screens. */
 export function TerminalShell({
@@ -25,7 +26,7 @@ export function TerminalShell({
   const host = window.location.host;
   const secure = window.location.protocol === "https:";
   return (
-    <div className="login-bg flex min-h-full items-center justify-center px-4 py-12">
+    <div className="login-bg relative flex min-h-full items-center justify-center px-4 py-12">
       <form
         onSubmit={onSubmit}
         noValidate
@@ -55,6 +56,14 @@ export function TerminalShell({
           {children}
         </div>
       </form>
+      <a
+        href="https://github.com/emremrangz/emremote"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 font-mono text-[11px] text-white/50 transition-colors hover:border-white/25 hover:text-white/80"
+      >
+        <Github className="h-3.5 w-3.5" /> GitHub
+      </a>
     </div>
   );
 }

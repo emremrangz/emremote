@@ -350,6 +350,7 @@ export interface SystemInfo {
   /** false when the operator set EMREMOTE_HIDE_DONATE. */
   donate?: boolean;
   update_check?: boolean;
+  github_stars?: number;
   latest_version?: string;
   release_url?: string;
   audit_retention_days?: number;

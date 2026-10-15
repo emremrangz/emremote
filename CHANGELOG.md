@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- GitHub button with the star count in the top bar (next to Donate) and on the sign-in and setup screens.
+
 ## 0.1.3 (2026-10-15)
 
 - The sidebar footer tells administrators when a newer release exists ("Update available") instead of

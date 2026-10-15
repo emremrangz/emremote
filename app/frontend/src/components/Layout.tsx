@@ -29,6 +29,7 @@ import { useActiveSessions, useDevices, useGroups, useSystem } from "@/hooks/que
 import { GroupsDialog } from "./GroupsDialog";
 import { CommandPalette } from "./CommandPalette";
 import { DonateDialog } from "./DonateDialog";
+import { GithubButton } from "./GithubButton";
 import { useDonateHidden } from "@/lib/donate";
 import { DeviceFormDialog } from "./DeviceForm";
 import { QuickConnectDialog } from "./QuickConnect";
@@ -331,6 +332,7 @@ export function Layout() {
               <Radio className="h-3.5 w-3.5" /> {live} live
             </Link>
           )}
+          <GithubButton stars={system.data?.github_stars} />
           {showDonate && (
             <button
               onClick={() => setDonateOpen(true)}

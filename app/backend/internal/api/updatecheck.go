@@ -13,7 +13,10 @@ import (
 )
 
 // releaseURL is fixed on purpose: the check never takes an address from user input.
-const releaseURL = "https://api.github.com/repos/emremrangz/emremote/releases/latest"
+const (
+	releaseURL = "https://api.github.com/repos/emremrangz/emremote/releases/latest"
+	repoURL    = "https://api.github.com/repos/emremrangz/emremote"
+)
 
 // latestRelease is the newest published version, refreshed in the background.
 type latestRelease struct {
@@ -40,24 +43,33 @@ func (s *Server) updateLoop(ctx context.Context) {
 	if !s.cfg.UpdateCheck {
 		return
 	}
-	check := func() {
+	get := func(url string, out any) bool {
 		cctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		req, err := http.NewRequestWithContext(cctx, http.MethodGet, releaseURL, nil)
+		req, err := http.NewRequestWithContext(cctx, http.MethodGet, url, nil)
 		if err != nil {
-			return
+			return false
 		}
 		req.Header.Set("Accept", "application/vnd.github+json")
 		req.Header.Set("User-Agent", "emremote/"+s.version)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			slog.Debug("update check failed", "error", err)
-			return
+			return false
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			slog.Debug("update check failed", "status", resp.StatusCode)
-			return
+			return false
+		}
+		return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out) == nil
+	}
+	check := func() {
+		var repo struct {
+			Stars int `json:"stargazers_count"`
+		}
+		if get(repoURL, &repo) && repo.Stars >= 0 {
+			s.stars.Store(int64(repo.Stars))
 		}
 		var rel struct {
 			Tag   string `json:"tag_name"`
@@ -65,7 +77,7 @@ func (s *Server) updateLoop(ctx context.Context) {
 			Draft bool   `json:"draft"`
 			Pre   bool   `json:"prerelease"`
 		}
-		if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil || rel.Draft || rel.Pre {
+		if !get(releaseURL, &rel) || rel.Draft || rel.Pre {
 			return
 		}
 		v := strings.TrimPrefix(rel.Tag, "v")

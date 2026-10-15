@@ -55,6 +55,7 @@ type Server struct {
 	setupBlocked bool
 	version      string
 	latest       latestRelease
+	stars        atomic.Int64 // GitHub star count; 0 until the first check succeeds
 }
 
 type Options struct {
@@ -618,6 +619,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"jump_enabled":            s.jumpEnabled(),
 		"donate":                  !s.cfg.HideDonate,
 		"update_check":            s.cfg.UpdateCheck,
+		"github_stars":            s.stars.Load(),
 		"latest_version":          latestForAdmin,
 		"release_url":             releaseForAdmin,
 		"audit_retention_days":    s.cfg.AuditRetentionDays,
