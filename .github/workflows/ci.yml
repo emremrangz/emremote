@@ -102,7 +102,9 @@ jobs:
           for _ in $(seq 1 60); do curl -sk "https://$IP:8443/healthz" | grep -q ok && break; sleep 3; done
           curl -sk "https://$IP:8443/healthz" | grep -q ok
           sleep 5
-          cp "$DATA/caddy/data/caddy/pki/authorities/local/root.crt" "$RUNNER_TEMP/root.crt"
+          # The proxy writes its data as root, so the runner needs sudo to read the certificate.
+          sudo cp "$DATA/caddy/data/caddy/pki/authorities/local/root.crt" "$RUNNER_TEMP/root.crt"
+          sudo chmod a+r "$RUNNER_TEMP/root.crt"
       - name: End-to-end checks
         env:
           EMREMOTE_URL: https://${{ env.IP }}:8443
