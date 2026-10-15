@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import clsx from "clsx";
+import { TerminalShell, TermPrompt, TERM_FIELD } from "@/components/TerminalShell";
 import { useAuth } from "@/lib/auth";
 import { ApiError, errorMessage } from "@/lib/api";
 
@@ -120,45 +121,18 @@ export default function LoginPage() {
     }
   };
 
-  const prompt = (label: string) => (
-    <span className="flex shrink-0 items-center gap-2">
-      <span className="text-[#7ee787]">❯</span>
-      <span className="text-[#79c0ff]">{label}:</span>
-    </span>
-  );
-  const field =
-    "min-w-0 flex-1 border-0 bg-transparent p-0 text-[#e6edf3] caret-[#7ee787] outline-none focus:ring-0 placeholder:text-white/20 disabled:opacity-60";
+  const prompt = (label: string) => <TermPrompt label={label} />;
+  const field = TERM_FIELD;
 
   return (
-    <div className="login-bg flex min-h-full items-center justify-center px-4 py-12">
-      <form
-        onSubmit={submit}
-        noValidate
-        className={clsx(
-          "w-full max-w-[680px] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0e13] shadow-[0_40px_100px_-24px_rgba(0,0,0,0.9),0_0_0_1px_rgba(126,231,135,0.05),0_0_80px_-30px_rgba(126,231,135,0.25)] animate-fade-in",
-          shaking && "term-shake",
-        )}
-        onAnimationEnd={(e) => e.target === e.currentTarget && setShaking(false)}
-        onClick={(e) => {
-          if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.term !== undefined)
-            (challenge ? codeRef : username ? passRef : userRef).current?.focus();
-        }}
-      >
-        <h1 className="sr-only">Sign in</h1>
-        {/* Title bar */}
-        <div className="flex items-center gap-2 border-b border-white/10 bg-gradient-to-b from-white/[0.05] to-white/[0.02] px-4 py-2.5">
-          <span className="h-3 w-3 rounded-full bg-[#ff5f57] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.25)]" />
-          <span className="h-3 w-3 rounded-full bg-[#febc2e] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.25)]" />
-          <span className="h-3 w-3 rounded-full bg-[#28c840] shadow-[inset_0_0_0_1px_rgba(0,0,0,0.25)]" />
-          <span className="flex-1 truncate px-3 text-center font-mono text-xs text-white/50">emremote@{host}: login</span>
-          <span className="flex items-center gap-1.5 font-mono text-[11px] text-white/40" title={secure ? "Encrypted connection (HTTPS)" : "Connection is not encrypted"}>
-            <span className={clsx("h-1.5 w-1.5 rounded-full", secure ? "bg-[#7ee787]" : "bg-[#e3b341]")} />
-            {secure ? "TLS" : "plain"}
-          </span>
-        </div>
-
-        {/* Screen */}
-        <div data-term className="term-screen cursor-text space-y-0.5 px-6 pb-6 pt-5 font-mono text-[13px] leading-6 text-[#c9d1d9]">
+    <TerminalShell
+      title="login"
+      heading="Sign in"
+      shaking={shaking}
+      onShakeEnd={() => setShaking(false)}
+      onSubmit={submit}
+      onBackgroundClick={() => (challenge ? codeRef : username ? passRef : userRef).current?.focus()}
+    >
           <p data-term className="term-line mb-1 flex items-baseline gap-3" style={{ "--d": "0ms" } as React.CSSProperties}>
             <span className="bg-gradient-to-r from-[#7ee787] to-[#79c0ff] bg-clip-text text-2xl font-bold tracking-tight text-transparent">emremote</span>
             <span className="text-white/35">self-hosted remote access</span>
@@ -337,8 +311,6 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
-        </div>
-      </form>
-    </div>
+    </TerminalShell>
   );
 }
