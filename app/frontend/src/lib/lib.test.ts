@@ -70,3 +70,22 @@ describe("textToKeysyms", () => {
     expect(textToKeysyms("x\r\ny")).toEqual([0x78, 0xff0d, 0x79]);
   });
 });
+
+import { describeKey, keyFileProblem } from "../components/KeyFileInput";
+
+describe("key files", () => {
+  const body = "-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAKj34GkxFhD90vcNLYLInFEX6Ppy1tPf9Cnzj4p4WGeKLs1Pt8Qu\n-----END RSA PRIVATE KEY-----";
+  it("accepts private keys and names their kind", () => {
+    expect(keyFileProblem(body)).toBeNull();
+    expect(describeKey(body)).toEqual({ kind: "RSA key (PEM)", encrypted: false });
+    expect(describeKey("-----BEGIN OPENSSH PRIVATE KEY-----\nx\n-----END OPENSSH PRIVATE KEY-----").kind).toBe("OpenSSH key");
+    expect(describeKey("-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,AB\n\nxx\n-----END RSA PRIVATE KEY-----").encrypted).toBe(true);
+  });
+  it("explains why a file is not a usable private key", () => {
+    expect(keyFileProblem("ssh-ed25519 AAAAC3Nz user@host")).toMatch(/public key/);
+    expect(keyFileProblem("PuTTY-User-Key-File-3: ssh-rsa")).toMatch(/PuTTYgen/);
+    expect(keyFileProblem("hello")).toMatch(/does not look like a private key/);
+    expect(keyFileProblem("")).toMatch(/empty/);
+    expect(keyFileProblem("A".repeat(40000))).toMatch(/too large/);
+  });
+});

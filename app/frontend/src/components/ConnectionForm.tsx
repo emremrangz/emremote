@@ -6,6 +6,7 @@ import { Dialog } from "./ui/Dialog";
 import { Button } from "./ui/Button";
 import { Field, Segmented, Switch } from "./ui/Field";
 import { OptionCard } from "./DeviceForm";
+import { KeyFileInput } from "./KeyFileInput";
 import { ApiError, errorMessage, post, put } from "@/lib/api";
 import type {
   Connection,
@@ -344,8 +345,8 @@ export function ConnectionFormDialog({
               </Field>
               {protocol === "ssh" && (
                 <>
-                  <Field label="Private key" optional error={errors["secret.private_key"]} hint="OpenSSH or PEM format. Used instead of, or together with, the password.">
-                    <textarea className="input min-h-[96px] font-mono text-2xs" value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" spellCheck={false} />
+                  <Field label="Private key" optional hint="A key file in OpenSSH or PEM format (RSA, ECDSA, Ed25519). Used instead of, or together with, the password. It is stored encrypted, like passwords.">
+                    <KeyFileInput value={privateKey} onChange={setPrivateKey} error={errors["secret.private_key"]} />
                   </Field>
                   <Field label="Key passphrase" optional error={errors["secret.passphrase"]}>
                     <input className="input" type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="new-password" />

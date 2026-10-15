@@ -1,3 +1,4 @@
+import { KeyFileInput } from "./KeyFileInput";
 import { useEffect, useState, type FormEvent } from "react";
 import { KeyRound } from "lucide-react";
 import { Dialog } from "./ui/Dialog";
@@ -105,8 +106,8 @@ export function CredentialFormDialog({
             <Field label="Password" optional error={errors["secret.password"]}>
               <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
             </Field>
-            <Field label="SSH private key" optional hint="Only used by SSH connections." error={errors["secret.private_key"]}>
-              <textarea className="input min-h-[80px] font-mono text-2xs" value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} placeholder="-----BEGIN OPENSSH PRIVATE KEY-----" spellCheck={false} />
+            <Field label="SSH private key" optional hint="A key file (.pem, id_rsa, id_ed25519 …), only used by SSH connections. Stored encrypted, like passwords.">
+              <KeyFileInput value={privateKey} onChange={setPrivateKey} error={errors["secret.private_key"]} />
             </Field>
             <Field label="Key passphrase" optional error={errors["secret.passphrase"]}>
               <input className="input" type="password" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} autoComplete="new-password" />

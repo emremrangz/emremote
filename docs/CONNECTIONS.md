@@ -142,6 +142,22 @@ desktops get Super and desktop shortcuts; SSH and Telnet get terminal keys (Ctrl
 Ctrl+L, Ctrl+R) and no zoom. The display menu (resolution, pixel density, keyboard layout) appears
 only for RDP. Set the device's operating system correctly so the right keys appear.
 
+## SSH key files
+
+In a connection's **Sign-in** tab, or in a saved credential, choose **Choose file…** (or drop the file) to
+use an SSH private key instead of a password: `.pem` files, `id_rsa`, `id_ecdsa`, `id_ed25519`, `.key`,
+in OpenSSH or PEM format (RSA, ECDSA and Ed25519). You can also paste the key text.
+
+- The key is sent to the server once and stored **encrypted, exactly like passwords** (with a key
+  derived from your sign-in password and the server key). The interface and API never show it again;
+  you can only replace or remove it.
+- A key that is protected by a passphrase needs the passphrase when you save it, so a wrong one is
+  caught at once. The passphrase is stored encrypted too.
+- The `.pub` file is the public half and is refused with an explanation. PuTTY `.ppk` files are not
+  supported: in PuTTYgen choose **Conversions, then Export OpenSSH key**. Encrypted PKCS#8 keys
+  (`BEGIN ENCRYPTED PRIVATE KEY`) are not supported; convert with `ssh-keygen -p -m PEM -f <file>`.
+- Put the public key in `~/.ssh/authorized_keys` on the target, as with any SSH client.
+
 ## The workspace: tabs and split panes
 
 Clicking **Connect** anywhere (Overview, Devices, search, Quick connect) opens the **workspace** window

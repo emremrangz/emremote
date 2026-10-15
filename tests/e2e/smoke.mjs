@@ -1033,6 +1033,59 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   await c.del(`/api/devices/${sd.data.id}`);
 }
 
+// ---- SSH key files: stored encrypted, used to sign in ----
+{
+  const { generateKeyPairSync } = await import("node:crypto");
+  const sshRsaLine = (publicKey) => {
+    const jwk = publicKey.export({ format: "jwk" });
+    const b64u = (x) => Buffer.from(x, "base64url");
+    const mpint = (buf) => { let i = 0; while (i < buf.length - 1 && buf[i] === 0) i++; buf = buf.subarray(i); if (buf[0] & 0x80) buf = Buffer.concat([Buffer.from([0]), buf]); return buf; };
+    const part = (buf) => { const l = Buffer.alloc(4); l.writeUInt32BE(buf.length); return Buffer.concat([l, buf]); };
+    const blob = Buffer.concat([part(Buffer.from("ssh-rsa")), part(mpint(b64u(jwk.e))), part(mpint(b64u(jwk.n)))]);
+    return `ssh-rsa ${blob.toString("base64")} e2e-key\n`;
+  };
+  const pair = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs1", format: "pem" }, publicKeyEncoding: { type: "spki", format: "pem" } });
+  const pairEnc = generateKeyPairSync("rsa", { modulusLength: 2048, privateKeyEncoding: { type: "pkcs1", format: "pem", cipher: "aes-256-cbc", passphrase: "open sesame" }, publicKeyEncoding: { type: "spki", format: "pem" } });
+  const { createPublicKey } = await import("node:crypto");
+  const authorized = sshRsaLine(createPublicKey(pair.publicKey)) + sshRsaLine(createPublicKey(pairEnc.publicKey));
+
+  // Put both public keys on the target through the password sign-in
+  const pa = await c.post(`/api/connections/${ssh.data.id}/ssh-access`, {});
+  const PA = `/api/ssh-access/${pa.data.id}`;
+  await c.post(`${PA}/files/mkdir`, { dir: "/home/tester", name: ".ssh" });
+  const put = await fetch(`${BASE}${PA}/files/upload?dir=${encodeURIComponent("/home/tester/.ssh")}&name=authorized_keys&overwrite=true`, {
+    method: "POST", body: authorized, headers: { "Content-Type": "application/octet-stream", Origin: ORIGIN, "X-CSRF-Token": c.csrf, Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") },
+  });
+  await c.del(PA);
+  check("public keys can be installed on the target", put.status === 201, `status ${put.status}`);
+
+  const kdev = await c.post("/api/devices", { name: `keys-${Date.now().toString(36)}`, hostname: "", address: TARGET_HOST, os: "linux", device_type: "server", description: "", notes: "", tags: [], group_id: null, favorite: false });
+  const mkConn = (key, passphrase, name) => c.post(`/api/devices/${kdev.data.id}/connections`, { name, protocol: "ssh", port: 12222, username: "tester", domain: "", credential_id: null, settings: {}, secret: { mode: "set", password: "", private_key: key, passphrase } });
+  const pub = await mkConn(pair.publicKey, "", "pub");
+  check("a public key is refused with an explanation", pub.status === 422 && /private key|public/i.test(pub.data?.error?.fields?.["secret.private_key"] ?? JSON.stringify(pub.data)), `${pub.status} ${JSON.stringify(pub.data?.error?.fields ?? pub.data?.error)}`);
+  const junk = await mkConn("-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----", "", "junk");
+  check("a broken key file is refused", junk.status === 422, `status ${junk.status}`);
+  const noPass = await mkConn(pairEnc.privateKey, "", "nopass");
+  const badPass = await mkConn(pairEnc.privateKey, "wrong", "badpass");
+  check("a key with a passphrase needs the right passphrase", noPass.status === 422 && badPass.status === 422, `${noPass.status} ${badPass.status}`);
+
+  const withKey = await mkConn(pair.privateKey, "", "key");
+  check("a private key file is accepted", withKey.status === 201, `status ${withKey.status}`);
+  check("the key is never returned by the API", !JSON.stringify(withKey.data).includes("PRIVATE KEY") && withKey.data.secret_fields?.includes("private_key"), JSON.stringify(withKey.data.secret_fields));
+  const viaKey = await c.post(`/api/connections/${withKey.data.id}/ssh-access`, {});
+  check("signing in over SFTP with the stored key works (no password)", viaKey.status === 201, `status ${viaKey.status} ${JSON.stringify(viaKey.data?.error ?? "")}`);
+  if (viaKey.status === 201) await c.del(`/api/ssh-access/${viaKey.data.id}`);
+  const encOk = await mkConn(pairEnc.privateKey, "open sesame", "keypass");
+  const viaEnc = encOk.status === 201 ? await c.post(`/api/connections/${encOk.data.id}/ssh-access`, {}) : { status: 0 };
+  check("a passphrase-protected key works with its passphrase", encOk.status === 201 && viaEnc.status === 201, `${encOk.status} ${viaEnc.status}`);
+  if (viaEnc.status === 201) await c.del(`/api/ssh-access/${viaEnc.data.id}`);
+  const sess = await openSession(c, withKey.data.id, { seconds: 9 });
+  check("a browser session signs in with the stored key", sess.imgBytes > 1000 && sess.errors.length === 0, `img=${sess.imgBytes} ${sess.errors.join(";")}`);
+  const raw = await c.get(`/api/audit?action=connection.&limit=50`);
+  check("the key does not appear in the audit log", !JSON.stringify(raw.data).includes("BEGIN RSA PRIVATE KEY"));
+  await c.del(`/api/devices/${kdev.data.id}`);
+}
+
 // ---- Statistics ----
 {
   const tag = Date.now().toString(36);

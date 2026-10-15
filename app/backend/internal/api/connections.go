@@ -51,10 +51,10 @@ func (in *secretInput) validate(v *validator, allowKey bool) (change bool, m sec
 	if key != "" {
 		if !allowKey {
 			v.fail("secret.private_key", "Private keys are only supported for SSH")
-		} else if len(key) > 16384 || !strings.HasPrefix(key, "-----BEGIN ") || !strings.Contains(key, "PRIVATE KEY-----") {
-			v.fail("secret.private_key", "Paste a PEM/OpenSSH private key (-----BEGIN … PRIVATE KEY-----)")
+		} else if normal, err := checkPrivateKey(in.PrivateKey, in.Passphrase); err != nil {
+			v.fail("secret.private_key", err.Error())
 		} else {
-			key += "\n"
+			key = normal
 		}
 	}
 	return true, secrets.Material{Password: in.Password, PrivateKey: key, Passphrase: in.Passphrase}

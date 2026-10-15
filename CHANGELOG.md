@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **SSH key files:** choose or drop a `.pem`, `id_rsa` or `id_ed25519` file instead of pasting; keys are
+  checked when saved (wrong passphrase, public key, PuTTY format are explained) and stored encrypted.
+
 - **First run without a token:** the first page creates the administrator and signs in. Setup is
   limited to private-network addresses, or protected by an optional `EMREMOTE_SETUP_TOKEN`.
 - **Published images:** `docker compose pull && docker compose up -d` (amd64 and arm64, from the

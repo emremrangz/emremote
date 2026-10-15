@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"net/netip"
 	"strings"
@@ -98,7 +100,8 @@ func TestKeyboardLayoutAuto(t *testing.T) {
 
 func TestSecretInputValidation(t *testing.T) {
 	v := newValidator()
-	change, m := (&secretInput{Mode: "set", Password: "pw", PrivateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nabc\n-----END OPENSSH PRIVATE KEY-----"}).validate(v, true)
+	_, edKey, _ := ed25519.GenerateKey(rand.Reader)
+	change, m := (&secretInput{Mode: "set", Password: "pw", PrivateKey: openssh(t, edKey, "")}).validate(v, true)
 	if !v.ok() || !change || m.Password != "pw" || !strings.HasSuffix(m.PrivateKey, "\n") {
 		t.Fatalf("valid secret rejected: %v", v.errs)
 	}
