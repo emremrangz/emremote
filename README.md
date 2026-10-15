@@ -82,12 +82,6 @@ in `.env` (it defaults to private ranges).
 
 ## Support the project
 
-If emremote is useful to you and you would like to help its development, you can support it by bank
-transfer:
-
-- **Bank:** TR80 0006 4000 0016 3120 7544 92
-- **Recipient:** Yunus Emre Marangoz
-- **Reference:** emremote Açık Kaynak Bağış
 
 Thank you for your support!
 
