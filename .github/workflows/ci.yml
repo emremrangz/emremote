@@ -111,5 +111,11 @@ jobs:
       - name: Logs after a failure
         if: failure()
         run: |
-          docker compose logs --tail 80 emremote guacd caddy || true
-          cat "$RUNNER_TEMP/fakeswitch.log" || true
+          {
+            docker compose ps -a
+            docker compose logs --tail 40 emremote guacd caddy postgres
+            cat "$RUNNER_TEMP/fakeswitch.log"
+          } > "$RUNNER_TEMP/diag.txt" 2>&1 || true
+          cat "$RUNNER_TEMP/diag.txt"
+          # Also as an annotation, so the cause is visible without opening the log.
+          echo "::error title=Diagnostics::$(tail -c 3500 "$RUNNER_TEMP/diag.txt" | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"
