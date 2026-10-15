@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7 (2026-10-16)
+
+- `scripts/update.sh` prints short progress lines; the details of git, the backup and docker appear only when
+  a step fails.
+- The star count and the "Update available" notice retry after 10 minutes when GitHub cannot be reached,
+  instead of waiting 12 hours.
+- Dependabot groups minor updates and skips major versions; the end-to-end suite runs in CI.
+
 ## 0.1.6 (2026-10-15)
 
 - A Sponsor button in the top bar and a README section link to GitHub Sponsors (no bank details).
