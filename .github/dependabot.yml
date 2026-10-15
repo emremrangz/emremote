@@ -1,14 +1,36 @@
+# Weekly, grouped, and without major-version jumps: a major upgrade of React, Tailwind, Vite or the
+# Go/Node base images is a migration that is done by hand, not by a bot. Security fixes still open
+# their own pull requests regardless of these rules.
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /app/backend
     schedule: {interval: weekly}
+    open-pull-requests-limit: 3
+    groups:
+      go-minor-patch:
+        update-types: [minor, patch]
   - package-ecosystem: npm
     directory: /app/frontend
     schedule: {interval: weekly}
+    open-pull-requests-limit: 3
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directory: /app
     schedule: {interval: weekly}
+    open-pull-requests-limit: 2
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: weekly}
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        update-types: [minor, patch, major]

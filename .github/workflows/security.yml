@@ -35,6 +35,8 @@ jobs:
         working-directory: app/frontend
 
   codeql:
+    # Dependabot's token cannot upload code scanning results, so the job would always fail there.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
