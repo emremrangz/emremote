@@ -71,7 +71,8 @@ code on a second line of the login screen; a recovery code can be typed instead.
 - A code works once, so signing in twice within the same 30 seconds needs the next code.
 - **Lost phone and recovery codes:** an administrator opens the user's menu → **Reset two-factor**
   (the user is signed out and signs in with the password only), or on the host run
-  `docker compose exec emremote /app/emremote reset-password <user>`, which also turns it off.
+  `docker compose exec emremote /app/emremote reset-2fa <user>`, which only turns two-factor off (the
+  password and saved passwords stay). `reset-password <user>` also turns it off but sets a new password.
 - Administrators can see in the Users list who has it on. Two-factor protects the sign-in; it does
   not change what a user may do.
 

@@ -201,6 +201,16 @@ docker compose exec emremote /app/emremote reset-password admin
 This prints a new random password once, signs out all of that user's sessions and records the
 reset in the audit log. Administrators can reset other users' passwords under **Users**.
 
+If you only lost the authenticator app (the password is fine), turn two-factor off for that user without
+touching the password or the saved passwords:
+
+```bash
+docker compose exec emremote /app/emremote reset-2fa <username>
+```
+
+The user is signed out and signs in with the password alone; recovery codes and administrators resetting
+it under **Users** are the other ways (see [USERS.md](USERS.md#two-factor-authentication)).
+
 Saved connection passwords are protected by the sign-in password (see SECURITY.md), so they cannot
 survive a forgotten password. The command refuses to run until you confirm with
 `--forget-saved-passwords`; the saved secrets are then deleted, and connections ask for credentials

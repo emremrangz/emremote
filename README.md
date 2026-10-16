@@ -44,6 +44,24 @@ cd ~ && git clone https://github.com/emremrangz/emremote.git && cd emremote
 docker compose up -d                                       # pulls the images and starts everything
 ```
 
+**Without git or curl: install from the ZIP file.** On the
+[Releases page](https://github.com/emremrangz/emremote/releases/latest) download the source ZIP, copy it to
+the machine that runs Docker and unpack it:
+
+```bash
+unzip emremote-*.zip && cd emremote-*/                     # the folder name carries the version
+./scripts/init-env.sh $(hostname -I | awk '{print $1}')    # writes .env with fresh secrets
+docker compose pull                                        # downloads the images (no build needed)
+docker compose up -d                                       # starts everything
+```
+
+No shell script available (for example Docker Desktop on Windows)? Copy `.env.example` to `.env` and fill in
+`EMREMOTE_SITE_ADDRESS` (the address you will open), `POSTGRES_PASSWORD` and `EMREMOTE_ENCRYPTION_KEY`
+(any long random strings; keep the key safe), then run the last two commands. Without a tag the images are
+the newest release (`latest`); to stay on exactly the version of your ZIP, add
+`EMREMOTE_IMAGE_TAG=<version>` (for example `0.1.7`) to `.env`. Later updates work like for any other
+install: `scripts/update.sh`.
+
 The installer generates the database password and the encryption key for you and stores them in `.env`.
 If ports 80 and 443 are already taken (for example by Nginx Proxy Manager), it picks free ones and prints
 the address to open, such as `https://192.168.1.50:8444`.
@@ -74,6 +92,17 @@ in `.env` (it defaults to private ranges).
 > **Status: 0.1.** Built for a trusted home or lab network. Read [docs/SECURITY.md](docs/SECURITY.md)
 > before exposing it further, and [docs/LIMITATIONS.md](docs/LIMITATIONS.md) for what is not done yet.
 
+## Locked out?
+
+- **Forgot a password:** an administrator sets a new one under **Users**. If you are the only administrator,
+  run `docker compose exec emremote /app/emremote reset-password <username>` in the install folder (saved
+  connection passwords can then only be kept if another user holds the key, see
+  [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#account-recovery)).
+- **Lost the authenticator app:** type one of your 10 recovery codes in the code line of the sign-in screen.
+  Without one, an administrator opens your entry under **Users** and chooses **Reset two-factor**. If you are
+  the only administrator, run `docker compose exec emremote /app/emremote reset-2fa <username>` on the server.
+  Your password and saved passwords stay as they are; sign in and set two-factor up again under **Settings**.
+
 ## Documentation
 
 [Deployment](docs/DEPLOYMENT.md) · [Connections](docs/CONNECTIONS.md) · [Users](docs/USERS.md) ·
@@ -82,8 +111,16 @@ in `.env` (it defaults to private ranges).
 
 ## Support the project
 
-If emremote is useful to you, you can support its development through
-[GitHub Sponsors](https://github.com/sponsors/emremrangz). Starring the repository helps too.
+emremote is free and open source, built and maintained in spare time. If it saves you time:
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-%E2%99%A5-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/emremrangz)
+[![Star on GitHub](https://img.shields.io/github/stars/emremrangz/emremote?style=social)](https://github.com/emremrangz/emremote)
+
+- **Sponsor** the work on [GitHub Sponsors](https://github.com/sponsors/emremrangz): a one-time or monthly
+  amount keeps releases and fixes coming.
+- **Star** the repository; it helps other people find it.
+- **Report** a bug or an idea in the [issues](https://github.com/emremrangz/emremote/issues), or tell a
+  colleague who manages servers.
 
 ## Contributing
 

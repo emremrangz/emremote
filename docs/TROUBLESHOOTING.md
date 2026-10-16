@@ -26,7 +26,7 @@ are allowed.
 | "The jump host refused to forward the connection" | The bastion's SSH server has TCP forwarding turned off. Set `AllowTcpForwarding yes` in its `sshd_config` and reload sshd. |
 | The Wake button does nothing | Wake-on-LAN must be enabled on the device and its broadcast has to reach the LAN. Enter the network's broadcast address in the device's More details, and check the BIOS/UEFI and network card wake settings. |
 | A shared-session link says it has ended | The owner stopped sharing, two hours passed, or the session ended. Ask for a new link. |
-| Lost the phone with the authenticator app | Use a recovery code on the login screen's code line. If you have none, an administrator resets it under Users, or run `reset-password <user>` on the host. |
+| Lost the phone with the authenticator app | Use a recovery code on the login screen's code line. If you have none, an administrator resets it under Users, or run `reset-2fa <user>` on the host (`docker compose exec emremote /app/emremote reset-2fa <user>`). |
 | "That code is not valid" with the right app | The phone's clock is off by more than about 30 seconds, or the code was already used (wait for the next one). |
 | Forgot the password | `docker compose exec emremote /app/emremote reset-password admin` |
 | First-time setup says "only offered to computers on a private network" | You opened emremote from a public address (or through a proxy that hides your real address). Open it from your local network, or set `EMREMOTE_SETUP_TOKEN` in `.env`, restart, and enter that token on the setup screen. |

@@ -32,6 +32,12 @@ func main() {
 		switch os.Args[1] {
 		case "healthcheck":
 			os.Exit(healthcheck())
+		case "reset-2fa":
+			if err := resetTwoFactor(os.Args[2:]); err != nil {
+				fmt.Fprintln(os.Stderr, "error:", err)
+				os.Exit(1)
+			}
+			return
 		case "reset-password":
 			if err := resetPassword(os.Args[2:]); err != nil {
 				fmt.Fprintln(os.Stderr, "error:", err)
@@ -167,6 +173,52 @@ func resetPassword(args []string) error {
 		fmt.Printf("%d saved connection secret(s) were deleted; enter them again where needed.\n", forgotten)
 		fmt.Println("Restart emremote (docker compose restart emremote) to clear the old key from memory.")
 	}
+	return nil
+}
+
+// resetTwoFactor turns two-factor sign-in off for one user and signs them out, without touching
+// the password or the saved connection passwords:
+//
+//	docker compose exec emremote /app/emremote reset-2fa <username>
+//
+// Access to the server is the recovery path, as with reset-password.
+func resetTwoFactor(args []string) error {
+	if len(args) != 1 {
+		return errors.New("usage: emremote reset-2fa <username>")
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pool, err := db.Open(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	st := store.New(pool)
+	user, err := st.GetUserByUsername(ctx, args[0])
+	if err != nil {
+		return fmt.Errorf("user %q: %w", args[0], err)
+	}
+	if !user.TwoFactor {
+		fmt.Printf("Two-factor authentication is not turned on for %s.\n", user.Username)
+		return nil
+	}
+	if err := st.DisableTOTP(ctx, user.ID); err != nil {
+		return err
+	}
+	revoked, err := st.DeleteUserSessions(ctx, user.ID, "")
+	if err != nil {
+		return err
+	}
+	details, _ := json.Marshal(map[string]any{"method": "cli", "revoked_sessions": len(revoked)})
+	_ = st.InsertAudit(ctx, store.AuditEvent{
+		Action: "user.2fa_reset", TargetType: "user", TargetID: user.ID, TargetName: user.Username,
+		ActorName: "cli", Success: true, Details: details,
+	})
+	fmt.Printf("Two-factor authentication was turned off for %s and their sessions were signed out.\nThey can sign in with the password alone and set it up again under Settings.\n", user.Username)
 	return nil
 }
 
