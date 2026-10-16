@@ -830,7 +830,6 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, active]);
 
   const zoomBy = (delta: number) => {

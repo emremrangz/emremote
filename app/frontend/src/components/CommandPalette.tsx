@@ -121,7 +121,7 @@ export function CommandPalette({
       if (deviceItems.length) out.push({ title: "Recent devices", items: deviceItems });
     }
     return out.filter((s) => s.items.length);
-  }, [devices.data, q, can, isAdmin, dark, onAddDevice, onQuickConnect]);
+  }, [devices.data, q, can, isAdmin, dark, onAddDevice, onQuickConnect, logout, navigate, setTheme]);
 
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 

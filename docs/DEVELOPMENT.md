@@ -43,7 +43,7 @@ cd app/frontend
 npm install -g npm@11.19.1   # npm 10 cannot resolve vitest 4's optional peers
 npm ci
 npm run dev                  # http://localhost:5173, proxies /api to localhost:8080
-npm run typecheck && npm test && npm run build
+npm run typecheck && npm run lint && npm test && npm run build
 ```
 
 Use `EMREMOTE_COOKIE_SECURE=false` only for plain-HTTP development on `localhost`.
@@ -53,7 +53,7 @@ Without a toolchain, the same checks run inside Docker:
 ```bash
 docker run --rm -v "$PWD/app/backend":/src -w /src golang:1.26.9-alpine3.24 go test ./...
 docker run --rm -v "$PWD/app/frontend":/app -w /app node:22.23.3-alpine3.24 \
-  sh -c 'npm i -g npm@11.19.1 && npm ci && npm run typecheck && npm test'
+  sh -c 'npm i -g npm@11.19.1 && npm ci && npm run typecheck && npm run lint && npm test'
 ```
 
 The production image build (`docker compose build`) also runs `go vet`, the Go tests, the TypeScript
