@@ -27,6 +27,11 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
+      # A new Go or Node line changes the toolchain; it is moved by hand together with go.mod and CI.
+      - dependency-name: "golang"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: weekly}
