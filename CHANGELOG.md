@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Update from the interface (optional):** the "Update available" notice opens a window with the release notes and, when the
+  optional `updater` container is on (`COMPOSE_PROFILES=updater`), an **Update now** button. It backs up the database,
+  downloads the new image, restarts, checks that it is healthy (and goes back to the old version if not), shows the
+  progress, and reloads the page afterwards. See docs/DEPLOYMENT.md for what the updater can do and why it is off by default.
+- Images carry their version in the `org.opencontainers.image.version` label.
+
 - **Quick view:** next to Connect there is now a button (and a menu section) that opens the session in a large
   window on top of the current page, without leaving it or opening another browser window. Closing it
   ends the session; "Open in window" moves it to the workspace. Escape goes to the remote computer, not to

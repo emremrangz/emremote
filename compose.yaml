@@ -176,6 +176,35 @@ services:
         limits:
           memory: 256m
 
+  # OPTIONAL. Lets an administrator update emremote from the web interface. Off unless you set
+  # COMPOSE_PROFILES=updater in .env (see docs/DEPLOYMENT.md, "Updating from the interface").
+  #
+  # This container holds the Docker socket, which is root-equivalent on the host, so it is kept as
+  # small as possible: no network, a read-only filesystem and one fixed script that only reacts to a
+  # request file in /state. The application itself never gets the socket.
+  updater:
+    profiles: ["updater"]
+    image: docker:27.5.1-cli
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/updater.sh"]
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    # Only to write into /state, which belongs to the application user.
+    cap_add: [DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - state:/state
+      - ./deploy/updater.sh:/updater.sh:ro
+      - ./compose.yaml:/project/compose.yaml:ro
+      - ${EMREMOTE_ENV_FILE:-./.env}:/project/.env:ro
+      - ${EMREMOTE_BACKUP_DIR:-./backups}:/project/backups
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
 volumes:
   state:
 

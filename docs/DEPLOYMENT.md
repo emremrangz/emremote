@@ -152,6 +152,31 @@ Administrators see **Update available** in the sidebar when GitHub has a newer r
 `api.github.com` for the latest release every hour (no data about your install is sent); set
 `EMREMOTE_UPDATE_CHECK=false` to turn it off, for example on a host without internet access.
 
+### Updating from the interface (optional)
+
+Clicking **Update available** opens a window with the release notes. With the optional **updater** turned on it
+also has an **Update now** button: emremote backs up the database, downloads the new image, restarts, waits until
+it is healthy (and goes back to the old version if it is not), and the page reloads at the sign-in screen.
+Everyone has to sign in again after an update, because saved passwords are locked whenever emremote restarts.
+
+Turn it on by adding this line to `.env`, then start it:
+
+```bash
+echo 'COMPOSE_PROFILES=updater' >> .env
+docker compose up -d
+```
+
+Be aware of what this is: the updater container holds the **Docker socket**, which is root-equivalent on the
+host. It is kept as small as possible (no network, read-only filesystem, no capabilities except writing to its
+state folder, one fixed script) and emremote itself never gets the socket: the application only creates a request
+file, the updater reacts to the file and runs the same fixed steps every time. Nothing from the application is used
+as a command or an argument. If you do not want that trade-off, leave the profile off and use `scripts/update.sh`
+on the server, which does the same steps by hand.
+
+What it does not do: it does not change `compose.yaml` (new options arrive with `scripts/update.sh` or a new
+download, the release notes say so), and it follows the image tag in `.env`: with `EMREMOTE_IMAGE_TAG` pinned to a
+version it only repeats that version. Database backups it makes are kept in `backups/` (the newest five).
+
 Image versions are pinned in `compose.yaml` and `app/Dockerfile`.
 
 1. Back up first: `scripts/backup.sh`.

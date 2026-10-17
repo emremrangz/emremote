@@ -25,6 +25,8 @@ RUN go vet ./... && go test ./... \
 
 # ---- Runtime: no shell, no package manager, non-root ----
 FROM gcr.io/distroless/static-debian12:nonroot
+ARG EMREMOTE_VERSION=dev
+LABEL org.opencontainers.image.version=${EMREMOTE_VERSION}
 COPY --from=api /out/emremote /app/emremote
 COPY --from=web /web/dist /app/web
 USER nonroot:nonroot

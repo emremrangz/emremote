@@ -79,6 +79,11 @@ echo "Downloading and starting the new version…"
 quiet docker compose pull -q
 quiet docker compose up -d --remove-orphans
 
+# The optional updater runs a script from this folder: restart it so a newer script takes effect.
+if [ -n "$(docker compose ps -q updater 2>/dev/null)" ]; then
+  quiet docker compose restart updater || true
+fi
+
 # 4. wait for health
 cid="$(docker compose ps -q emremote)"
 echo -n "Waiting for emremote to become healthy"

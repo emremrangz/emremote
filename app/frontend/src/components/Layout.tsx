@@ -29,6 +29,7 @@ import { GroupsDialog } from "./GroupsDialog";
 import { CommandPalette } from "./CommandPalette";
 import { GithubButton, SponsorButton } from "./GithubButton";
 import { QuickViewHost } from "./QuickView";
+import { UpdateDialog } from "./UpdateDialog";
 import { DeviceFormDialog } from "./DeviceForm";
 import { QuickConnectDialog } from "./QuickConnect";
 import { useUpdateAvailable } from "@/hooks/useUpdateCheck";
@@ -102,6 +103,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: 
   const { can, isAdmin } = useAccess();
   const loc = useLocation();
   const [groupsOpen, setGroupsOpen] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
   const params = new URLSearchParams(loc.search);
   const onDevices = loc.pathname === "/devices";
   const groupParam = onDevices ? params.get("group") : null;
@@ -206,21 +208,16 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: 
         {system.data?.gateway === "unreachable" ? (
           <span className="text-danger">Gateway unreachable</span>
         ) : system.data?.latest_version && system.data.release_url ? (
-          <a
-            href={system.data.release_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-accent hover:underline"
-            title="Open the release notes. Update with scripts/update.sh"
-          >
+          <button type="button" onClick={() => setUpdateOpen(true)} className="font-medium text-accent hover:underline" title="See what is new and update">
             Update available: v{system.data.latest_version}
-          </a>
+          </button>
         ) : (
           <span>{system.data ? "Up to date" : "…"}</span>
         )}
         <span className="ml-auto font-mono">v{system.data?.version ?? ""}</span>
       </div>
       <GroupsDialog open={groupsOpen} onOpenChange={setGroupsOpen} />
+      <UpdateDialog open={updateOpen} onOpenChange={setUpdateOpen} releaseUrl={system.data?.release_url} />
     </>
   );
 }

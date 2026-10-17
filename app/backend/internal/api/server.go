@@ -231,6 +231,8 @@ func (s *Server) Handler() http.Handler {
 	a("POST /api/users/{id}/password", s.adminOnly(s.handleResetUserPassword))
 	a("POST /api/users/{id}/sign-out", s.adminOnly(s.handleSignOutUser))
 	a("POST /api/users/{id}/2fa/reset", s.adminOnly(s.handleResetUserTwoFactor))
+	a("GET /api/update", s.adminOnly(s.handleUpdateStatus))
+	a("POST /api/update", s.adminOnly(s.handleUpdateStart))
 	a("GET /api/teams", s.adminOnly(s.handleListTeams))
 	a("POST /api/teams", s.adminOnly(s.handleCreateTeam))
 	a("PUT /api/teams/{id}", s.adminOnly(s.handleUpdateTeam))
