@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.9 (2026-10-17)
 
 - **Update from the interface (optional):** the "Update available" notice opens a window with the release notes and, when the
   optional `updater` container is on (`COMPOSE_PROFILES=updater`), an **Update now** button. It backs up the database,
