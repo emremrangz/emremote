@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- **Quick view:** next to Connect there is now a button (and a menu section) that opens the session in a large
+  window on top of the current page, without leaving it or opening another browser window. Closing it
+  ends the session; "Open in window" moves it to the workspace. Escape goes to the remote computer, not to
+  the window.
+- The Wake button is no longer shown for virtual machines and containers, which have no network card to wake.
+- Closing a connected session tab in the workspace asks for confirmation in a dialog first.
+- `emremote reset-2fa <user>` turns two-factor off from the server without changing the password.
+- README: installing from the ZIP file, what to do when locked out, a clearer support section.
+- The front end is checked with ESLint (`npm run lint`) in CI, next to the type check and the tests.
+- npm packages: minor and patch updates.
+
 ## 0.1.8 (2026-10-16)
 
 - The check for a newer release (and the GitHub star count) now runs every hour instead of every 12 hours.

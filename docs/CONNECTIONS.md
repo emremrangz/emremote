@@ -206,6 +206,14 @@ gateway joins them read-only, and emremote drops any input they send as well).
 - Viewers see everything on the screen, including any secret typed into a visible field. Share
   only with people who may see what you are about to do.
 
+## Quick view
+
+**Connect** opens the session in the workspace window (tabs and split panes). For a quick look or a short
+command you can stay on the page instead: the **Quick view** button next to Connect, and the "View here, on
+this page" entries of the Connect menu, open the session in a large window over the current page.
+Keyboard, clipboard and the toolbar work as in the workspace. Closing the window ends the session, and
+**Open in window** reopens the session in the workspace. Escape is sent to the remote computer.
+
 ## Wake-on-LAN
 
 Give a device its **MAC address** (Edit device, More details) and a **Wake** button appears on its
@@ -213,6 +221,7 @@ page. emremote sends the magic packet to the device's address and to the broadca
 network (the `.255` of its /24 unless you enter another one). The address is also filled in
 automatically the first time emremote reads the device over SSH.
 
+- Wake only appears for physical computers; virtual machines and containers (for example Proxmox LXC) have no network card to wake.
 - The device must be set up for it (BIOS/UEFI "Wake on LAN" and the network card's wake setting).
 - emremote runs in a Docker network, so delivery of the broadcast depends on your host and router.
   If the device does not wake, enter its network's broadcast address explicitly, or make sure the
