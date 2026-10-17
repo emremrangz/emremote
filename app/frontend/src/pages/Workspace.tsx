@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Columns2, ExternalLink, Grid2x2, Plus, Rows2, Square, X, Zap } from "lucide-react";
 import { SessionView, type SessionInfo } from "./Session";
 import { Dialog } from "@/components/ui/Dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/Button";
 import { OsIcon } from "@/components/OsIcon";
 import { ProtocolBadge } from "@/components/Status";
@@ -195,6 +196,10 @@ export default function WorkspacePage() {
     return () => ch.close();
   }, [addTab]);
 
+  // Closing a live session asks first; a session that is still connecting or already ended closes at once.
+  const [closing, setClosing] = useState<Tab | null>(null);
+  const askClose = (t: Tab) => (t.phase === "connected" ? setClosing(t) : closeTab(t.key));
+
   const closeTab = (key: string) => {
     setTabs((t) => t.filter((x) => x.key !== key));
     setSlots((s) => s.map((x) => (x === key ? null : x)));
@@ -257,7 +262,7 @@ export default function WorkspacePage() {
                   "group flex h-8 max-w-[220px] shrink-0 items-center gap-2 rounded-t-md border border-b-0 px-2.5 text-xs",
                   current ? "border-white/15 bg-[#05070a] text-fg" : shown ? "border-white/10 bg-white/[0.04] text-fg" : "border-transparent text-muted hover:bg-white/5 hover:text-fg",
                 )}
-                onAuxClick={(e) => e.button === 1 && closeTab(t.key)}
+                onAuxClick={(e) => e.button === 1 && askClose(t)}
               >
                 <button className="flex min-w-0 items-center gap-2" onClick={() => show(t.key)} title={t.title}>
                   <span className={clsx("h-2 w-2 shrink-0 rounded-full", dot(t))} />
@@ -267,7 +272,7 @@ export default function WorkspacePage() {
                 <button className="rounded p-0.5 text-subtle opacity-0 hover:bg-white/10 hover:text-fg group-hover:opacity-100 focus:opacity-100" onClick={() => popOut(t)} aria-label={`Open ${t.title} in its own window`} title="Open in its own window">
                   <ExternalLink className="h-3 w-3" />
                 </button>
-                <button className="rounded p-0.5 text-subtle hover:bg-white/10 hover:text-fg" onClick={() => closeTab(t.key)} aria-label={`Close ${t.title}`} title="Close session">
+                <button className="rounded p-0.5 text-subtle hover:bg-white/10 hover:text-fg" onClick={() => askClose(t)} aria-label={`Close ${t.title}`} title="Close session">
                   <X className="h-3 w-3" />
                 </button>
               </div>
@@ -350,6 +355,19 @@ export default function WorkspacePage() {
 
       <NewSessionDialog open={picking} onOpenChange={setPicking} onPick={(c) => addTab(c.id)} onQuick={can("quick.connect") ? () => { setPicking(false); setQuick(true); } : undefined} />
       <QuickConnectDialog open={quick} onOpenChange={setQuick} onLaunch={addTab} />
+      <ConfirmDialog
+        open={!!closing}
+        onOpenChange={(o) => !o && setClosing(null)}
+        title="Close this session?"
+        confirmLabel="Close session"
+        onConfirm={async () => {
+          if (closing) closeTab(closing.key);
+        }}
+      >
+        <p className="text-[13px] text-muted">
+          <span className="font-medium text-fg">{closing?.title}</span> is connected. Closing it ends the session; anything you have not saved on the remote computer may be lost.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

@@ -738,7 +738,15 @@ await page.evaluate(async (ids) => {
   await shot("33-workspace-grid", ws);
   const tabCount = await ws.getByRole("tab").count();
   const midCount = await activeCount();
+  // Closing a live session asks first; cancelling keeps it, confirming ends it.
   await ws.getByRole("button", { name: /^Close / }).first().click();
+  await ws.getByRole("heading", { name: "Close this session?" }).waitFor();
+  await shot("33b-close-session-confirm", ws);
+  await ws.getByRole("button", { name: "Cancel" }).click();
+  await ws.waitForTimeout(500);
+  check("cancelling the close prompt keeps the session", (await ws.getByRole("tab").count()) === tabCount && (await activeCount()) === midCount, `tabs ${await ws.getByRole("tab").count()}/${tabCount}`);
+  await ws.getByRole("button", { name: /^Close / }).first().click();
+  await ws.getByRole("button", { name: "Close session" }).click();
   await ws.waitForTimeout(2500);
   const afterClose = await activeCount();
   check("closing a tab ends that remote session", (await ws.getByRole("tab").count()) === tabCount - 1 && afterClose === midCount - 1, `tabs ${tabCount}→${await ws.getByRole("tab").count()}, live sessions ${midCount}→${afterClose}`);
