@@ -12,6 +12,7 @@
 - README: installing from the ZIP file, what to do when locked out, a clearer support section.
 - The front end is checked with ESLint (`npm run lint`) in CI, next to the type check and the tests.
 - npm packages: minor and patch updates.
+- The buttons at the top of a device page (Wake, Quick view, Connect, Edit device) have the same size.
 
 ## 0.1.8 (2026-10-16)
 

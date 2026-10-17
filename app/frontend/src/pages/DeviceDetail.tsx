@@ -196,6 +196,7 @@ export default function DeviceDetailPage() {
           {/* Wake-on-LAN is for physical computers: a container or a virtual machine has no network card to wake. */}
           {canConnect && d.mac && !(facts.virtualization && facts.virtualization.kind !== "physical") && (
             <Button
+              className="min-w-[8.5rem] justify-center"
               icon={<Power className="h-3.5 w-3.5" />}
               loading={waking}
               title={`Send a Wake-on-LAN packet to ${d.mac}`}
@@ -216,10 +217,10 @@ export default function DeviceDetailPage() {
           )}
           {canConnect && conns.length === 1 && (
             <>
-              <Button icon={<AppWindow className="h-3.5 w-3.5" />} onClick={() => openQuickView(conns[0].id)} title="View here, without leaving this page">
+              <Button className="min-w-[8.5rem] justify-center" icon={<AppWindow className="h-3.5 w-3.5" />} onClick={() => openQuickView(conns[0].id)} title="View here, without leaving this page">
                 Quick view
               </Button>
-              <Button variant="primary" icon={<Play className="h-3.5 w-3.5" />} onClick={() => launchConnection(conns[0].id)} title="Open in the workspace window">
+              <Button className="min-w-[8.5rem] justify-center" variant="primary" icon={<Play className="h-3.5 w-3.5" />} onClick={() => launchConnection(conns[0].id)} title="Open in the workspace window">
                 Connect
               </Button>
             </>
@@ -227,7 +228,7 @@ export default function DeviceDetailPage() {
           {canConnect && conns.length > 1 && (
             <Menu>
               <MenuTrigger asChild>
-                <Button variant="primary" icon={<Play className="h-3.5 w-3.5" />}>
+                <Button className="min-w-[8.5rem] justify-center" variant="primary" icon={<Play className="h-3.5 w-3.5" />}>
                   Connect <ChevronDown className="h-3.5 w-3.5 opacity-70" />
                 </Button>
               </MenuTrigger>
@@ -252,7 +253,7 @@ export default function DeviceDetailPage() {
             </Menu>
           )}
           {d.can_manage && (
-            <Button icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(true)}>
+            <Button className="min-w-[8.5rem] justify-center" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => setEditing(true)}>
               Edit device
             </Button>
           )}
