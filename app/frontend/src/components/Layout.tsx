@@ -28,6 +28,7 @@ import { useActiveSessions, useDevices, useGroups, useSystem } from "@/hooks/que
 import { GroupsDialog } from "./GroupsDialog";
 import { CommandPalette } from "./CommandPalette";
 import { GithubButton, SponsorButton } from "./GithubButton";
+import { QuickViewHost } from "./QuickView";
 import { DeviceFormDialog } from "./DeviceForm";
 import { QuickConnectDialog } from "./QuickConnect";
 import { useUpdateAvailable } from "@/hooks/useUpdateCheck";
@@ -367,6 +368,7 @@ export function Layout() {
       />
       <DeviceFormDialog open={addOpen} onOpenChange={setAddOpen} onSaved={(d) => navigate(`/devices/${d.id}`)} />
       <QuickConnectDialog open={quickOpen} onOpenChange={setQuickOpen} />
+      <QuickViewHost />
     </div>
   );
 }

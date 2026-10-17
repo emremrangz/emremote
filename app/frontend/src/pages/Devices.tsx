@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Pencil,
   Trash2,
+  AppWindow,
   Play,
   FolderTree,
   Monitor,
@@ -34,6 +35,7 @@ import type { Device, OS, Protocol } from "@/lib/types";
 import { DEVICE_TYPE_LABELS, OS_LABELS, PROTOCOL_LABELS } from "@/lib/constants";
 import { relativeTime } from "@/lib/format";
 import { launchConnection } from "@/lib/launch";
+import { openQuickView } from "@/lib/quickview";
 import { useAccess } from "@/lib/auth";
 import { useToast } from "@/components/ui/Toast";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -73,9 +75,12 @@ export function ConnectButton({ device, size = "sm" }: { device: Device; size?: 
     ) : null;
   if (cs.length === 1)
     return (
-      <Button size={size} icon={<Play className="h-3 w-3" />} onClick={() => launchConnection(cs[0].id)} title={`Open ${PROTOCOL_LABELS[cs[0].protocol]} session in a new tab`}>
-        {PROTOCOL_LABELS[cs[0].protocol]}
-      </Button>
+      <span className="inline-flex items-center gap-1">
+        <Button size={size} icon={<AppWindow className="h-3 w-3" />} onClick={() => openQuickView(cs[0].id)} title="View here, without leaving this page" aria-label={`Quick view ${PROTOCOL_LABELS[cs[0].protocol]}`} />
+        <Button size={size} icon={<Play className="h-3 w-3" />} onClick={() => launchConnection(cs[0].id)} title={`Open ${PROTOCOL_LABELS[cs[0].protocol]} session in the workspace window`}>
+          {PROTOCOL_LABELS[cs[0].protocol]}
+        </Button>
+      </span>
     );
   return (
     <Menu>
@@ -88,6 +93,14 @@ export function ConnectButton({ device, size = "sm" }: { device: Device; size?: 
         <MenuLabel>Open session</MenuLabel>
         {cs.map((c) => (
           <MenuItem key={c.id} onSelect={() => launchConnection(c.id)} icon={<ConnectionStatusDot c={c} />} shortcut={`:${c.port}`}>
+            <span className="flex items-center gap-2">
+              <ProtocolBadge protocol={c.protocol} /> {c.name}
+            </span>
+          </MenuItem>
+        ))}
+        <MenuLabel>View here, on this page</MenuLabel>
+        {cs.map((c) => (
+          <MenuItem key={`qv-${c.id}`} onSelect={() => openQuickView(c.id)} icon={<ConnectionStatusDot c={c} />} shortcut={`:${c.port}`}>
             <span className="flex items-center gap-2">
               <ProtocolBadge protocol={c.protocol} /> {c.name}
             </span>

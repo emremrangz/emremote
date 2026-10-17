@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  AppWindow,
   ChevronRight,
   Pencil,
   Trash2,
@@ -35,6 +36,7 @@ import type { Connection, DeviceFacts, Protocol } from "@/lib/types";
 import { DEVICE_TYPE_LABELS, OS_LABELS, PROTOCOL_HINT, PROTOCOL_LABELS, SUGGESTED_PROTOCOLS } from "@/lib/constants";
 import { bytes, dateTime, relativeTime } from "@/lib/format";
 import { launchConnection } from "@/lib/launch";
+import { openQuickView } from "@/lib/quickview";
 import { useAccess } from "@/lib/auth";
 import { useToast } from "@/components/ui/Toast";
 import { DeviceActivity, DeviceSSHWorkspace } from "@/components/DeviceWorkspace";
@@ -191,7 +193,8 @@ export default function DeviceDetailPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {canConnect && d.mac && (
+          {/* Wake-on-LAN is for physical computers: a container or a virtual machine has no network card to wake. */}
+          {canConnect && d.mac && !(facts.virtualization && facts.virtualization.kind !== "physical") && (
             <Button
               icon={<Power className="h-3.5 w-3.5" />}
               loading={waking}
@@ -212,9 +215,14 @@ export default function DeviceDetailPage() {
             </Button>
           )}
           {canConnect && conns.length === 1 && (
-            <Button variant="primary" icon={<Play className="h-3.5 w-3.5" />} onClick={() => launchConnection(conns[0].id)}>
-              Connect
-            </Button>
+            <>
+              <Button icon={<AppWindow className="h-3.5 w-3.5" />} onClick={() => openQuickView(conns[0].id)} title="View here, without leaving this page">
+                Quick view
+              </Button>
+              <Button variant="primary" icon={<Play className="h-3.5 w-3.5" />} onClick={() => launchConnection(conns[0].id)} title="Open in the workspace window">
+                Connect
+              </Button>
+            </>
           )}
           {canConnect && conns.length > 1 && (
             <Menu>
@@ -227,6 +235,14 @@ export default function DeviceDetailPage() {
                 <MenuLabel>Open session with</MenuLabel>
                 {conns.map((c) => (
                   <MenuItem key={c.id} onSelect={() => launchConnection(c.id)} shortcut={`:${c.port}`}>
+                    <span className="flex items-center gap-2">
+                      <ProtocolBadge protocol={c.protocol} /> {c.name}
+                    </span>
+                  </MenuItem>
+                ))}
+                <MenuLabel>View here, on this page</MenuLabel>
+                {conns.map((c) => (
+                  <MenuItem key={`qv-${c.id}`} onSelect={() => openQuickView(c.id)} shortcut={`:${c.port}`}>
                     <span className="flex items-center gap-2">
                       <ProtocolBadge protocol={c.protocol} /> {c.name}
                     </span>
