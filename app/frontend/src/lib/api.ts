@@ -28,7 +28,7 @@ export function onUnauthorized(fn: Listener) {
   };
 }
 
-export async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+async function api<T = unknown>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const method = init.method ?? "GET";
   const headers: Record<string, string> = { Accept: "application/json" };
   if (init.body !== undefined) headers["Content-Type"] = "application/json";

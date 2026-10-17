@@ -26,7 +26,7 @@ export function Ring({ value, size = 56, stroke = 6, className, label }: { value
   );
 }
 
-export interface Segment {
+interface Segment {
   label: string;
   value: number;
   className: string; // text-* colour
@@ -112,7 +112,7 @@ export function DayBars({ days }: { days: { date: string; count: number }[] }) {
   );
 }
 
-export interface StackDay {
+interface StackDay {
   date: string;
   values: { key: string; value: number; className: string }[];
 }

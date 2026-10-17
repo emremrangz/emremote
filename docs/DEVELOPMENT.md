@@ -43,7 +43,7 @@ cd app/frontend
 npm install -g npm@11.19.1   # npm 10 cannot resolve vitest 4's optional peers
 npm ci
 npm run dev                  # http://localhost:5173, proxies /api to localhost:8080
-npm run typecheck && npm run lint && npm test && npm run build
+npm run typecheck && npm run lint && npm run knip && npm test && npm run build
 ```
 
 Use `EMREMOTE_COOKIE_SECURE=false` only for plain-HTTP development on `localhost`.

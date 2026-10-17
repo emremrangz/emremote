@@ -1,6 +1,6 @@
 import { Github, Heart, Star } from "lucide-react";
 
-export const REPO_URL = "https://github.com/emremrangz/emremote";
+const REPO_URL = "https://github.com/emremrangz/emremote";
 
 function compact(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, "")}k` : String(n);

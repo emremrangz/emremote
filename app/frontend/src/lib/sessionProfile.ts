@@ -44,19 +44,19 @@ export function sessionProfile(protocol?: Protocol, os?: OS): SessionProfile {
   return protocol === "rdp" ? "windows" : "linux";
 }
 
-export interface Shortcut {
+interface Shortcut {
   label: string;
   keys: number[];
   hint?: string;
 }
 
-export interface ModifierKey {
+interface ModifierKey {
   label: string;
   keysym: number;
   title: string;
 }
 
-export interface ProfileKeys {
+interface ProfileKeys {
   /** One-click buttons shown on the toolbar. */
   quick: Shortcut[];
   /** Keys that can be held for the next key press. */

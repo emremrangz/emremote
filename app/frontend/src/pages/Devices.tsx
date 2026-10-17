@@ -63,7 +63,7 @@ function useStoredView(): [View, (v: View) => void] {
   ];
 }
 
-export function ConnectButton({ device, size = "sm" }: { device: Device; size?: "sm" | "md" }) {
+function ConnectButton({ device, size = "sm" }: { device: Device; size?: "sm" | "md" }) {
   const { can } = useAccess();
   const cs = device.connections;
   if (!can("sessions.connect")) return null;

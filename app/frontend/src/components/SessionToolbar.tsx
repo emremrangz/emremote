@@ -32,7 +32,7 @@ import { TerminalAppearance, type TerminalAppearanceProps } from "./TerminalAppe
 
 export type Resolution = "window" | "monitor" | "1280x720" | "1600x900" | "1920x1080" | "2560x1440" | "3840x2160";
 
-export interface ToolbarProps {
+interface ToolbarProps {
   protocol?: Protocol;
   /** What the remote side is; decides which keys and controls are offered. */
   profile: SessionProfile;

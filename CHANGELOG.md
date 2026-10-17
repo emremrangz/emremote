@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Removed code that nothing used (found with Knip and Go's deadcode); Knip now runs in CI so unused code is caught early.
+
 ## 0.1.9 (2026-10-17)
 
 - **Update from the interface (optional):** the "Update available" notice opens a window with the release notes and, when the

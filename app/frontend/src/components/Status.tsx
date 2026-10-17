@@ -3,7 +3,7 @@ import type { ConnectionSummary, Device, Protocol } from "@/lib/types";
 import { PROTOCOL_LABELS } from "@/lib/constants";
 import { relativeTime } from "@/lib/format";
 
-export type Reach = "reachable" | "partial" | "unreachable" | "unknown" | "none";
+type Reach = "reachable" | "partial" | "unreachable" | "unknown" | "none";
 
 export function deviceReachability(d: Pick<Device, "connections">): Reach {
   const cs = d.connections;

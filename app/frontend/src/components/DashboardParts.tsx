@@ -10,16 +10,6 @@ import { launchConnection } from "@/lib/launch";
 
 // Building blocks shared by the Overview and Statistics pages.
 
-export function Stat({ label, value, to, hint }: { label: string; value: number; to: string; hint?: string }) {
-  return (
-    <Link to={to} className="group px-5 py-4 transition-colors hover:bg-surface-2/60">
-      <p className="text-[13px] text-muted group-hover:text-fg">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums tracking-[-0.02em]">{value}</p>
-      {hint && <p className="mt-0.5 text-xs text-subtle">{hint}</p>}
-    </Link>
-  );
-}
-
 export function Panel({ title, action, children, className }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={clsx("card flex flex-col", className)}>
@@ -51,28 +41,3 @@ export function DeviceRow({ d, meta }: { d: Device; meta: string }) {
     </li>
   );
 }
-
-export function Bars<K extends string>({ data, labels, icon }: { data: Partial<Record<K, number>>; labels: Record<K, string>; icon?: (k: K) => ReactNode }) {
-  const entries = (Object.entries(data) as [K, number][]).sort((a, b) => b[1] - a[1]);
-  const total = entries.reduce((s, [, n]) => s + n, 0);
-  if (!total) return <p className="py-6 text-center text-sm text-subtle">No data yet</p>;
-  return (
-    <ul className="space-y-3 py-4">
-      {entries.map(([k, n]) => (
-        <li key={k}>
-          <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="flex items-center gap-2">
-              {icon?.(k)}
-              {labels[k] ?? k}
-            </span>
-            <span className="tabular-nums text-muted">{n}</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-surface-3">
-            <div className="h-full rounded-full bg-accent/70" style={{ width: `${(n / total) * 100}%` }} />
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-

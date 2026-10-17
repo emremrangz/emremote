@@ -2,7 +2,7 @@
 // (public/vendor/guacamole-common-js, unmodified upstream 1.6.0).
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type GuacamoleNS = any;
+type GuacamoleNS = any;
 export type GuacClient = any;
 
 declare global {
@@ -96,22 +96,6 @@ export function statusMessage(code: number, protocol?: string): { title: string;
       };
   }
 }
-
-/** X11 keysyms used by the special-key menu. */
-export const Keysym = {
-  Ctrl: 0xffe3,
-  Alt: 0xffe9,
-  Shift: 0xffe1,
-  Super: 0xffeb,
-  Delete: 0xffff,
-  Escape: 0xff1b,
-  Tab: 0xff09,
-  Print: 0xff61,
-  BackSpace: 0xff08,
-  F4: 0xffc1,
-  L: 0x006c,
-  R: 0x0072,
-} as const;
 
 export function supportedImageTypes(): string[] {
   const types = ["image/png", "image/jpeg"];

@@ -109,8 +109,6 @@ func List(c *sftp.Client, dir string) (*Listing, error) {
 	return out, nil
 }
 
-func Stat(c *sftp.Client, p string) (os.FileInfo, error) { return c.Stat(p) }
-
 // CopyFile streams a remote file into w.
 func CopyFile(c *sftp.Client, p string, w io.Writer) (int64, error) {
 	f, err := c.Open(p)

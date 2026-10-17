@@ -43,10 +43,6 @@ export function duration(seconds: number): string {
   return `${h}h ${m % 60}m`;
 }
 
-export function pluralize(n: number, one: string, many = one + "s") {
-  return `${n} ${n === 1 ? one : many}`;
-}
-
 export function bytes(n: number | null | undefined, digits = 1): string {
   if (n === null || n === undefined || !isFinite(n)) return "-";
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];

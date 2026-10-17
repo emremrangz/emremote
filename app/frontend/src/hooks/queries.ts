@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { del, get, post, put } from "@/lib/api";
+import { get, post, put } from "@/lib/api";
 import type {
   AuditEvent,
   Connection,
@@ -72,7 +72,7 @@ export const useActiveSessions = () =>
     refetchInterval: 10_000,
   });
 
-export interface AuditPage {
+interface AuditPage {
   events: AuditEvent[];
   next_cursor: number;
 }
@@ -118,4 +118,3 @@ export function useCheckDevice() {
   });
 }
 
-export { del, post, put };

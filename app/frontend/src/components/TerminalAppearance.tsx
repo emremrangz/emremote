@@ -12,7 +12,7 @@ export interface TerminalAppearanceProps {
   onReset: () => void;
 }
 
-export function Swatch({ theme }: { theme: (typeof TERMINAL_THEMES)[number] }) {
+function Swatch({ theme }: { theme: (typeof TERMINAL_THEMES)[number] }) {
   return (
     <span className="flex h-5 w-14 shrink-0 items-center gap-0.5 rounded border border-white/15 px-1" style={{ background: theme.bg }} aria-hidden="true">
       <span className="font-mono text-[10px] leading-none" style={{ color: theme.fg }}>

@@ -34,7 +34,7 @@ import { DeviceFormDialog } from "./DeviceForm";
 import { QuickConnectDialog } from "./QuickConnect";
 import { useUpdateAvailable } from "@/hooks/useUpdateCheck";
 
-export function Logo({ className, compact }: { className?: string; compact?: boolean }) {
+function Logo({ className, compact }: { className?: string; compact?: boolean }) {
   return (
     <span className={clsx("flex items-center gap-2", className)}>
       <svg viewBox="0 0 24 24" className="h-[22px] w-[22px] shrink-0" aria-hidden="true">
@@ -366,18 +366,6 @@ export function Layout() {
       <DeviceFormDialog open={addOpen} onOpenChange={setAddOpen} onSaved={(d) => navigate(`/devices/${d.id}`)} />
       <QuickConnectDialog open={quickOpen} onOpenChange={setQuickOpen} />
       <QuickViewHost />
-    </div>
-  );
-}
-
-export function AuthShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-full items-center justify-center bg-bg px-4 py-12">
-      <div className="w-full max-w-[360px]">
-        <Logo className="mb-8 justify-center" />
-        {children}
-        <p className="mt-8 text-center text-xs text-subtle">Self-hosted remote access · keep this server on a trusted network</p>
-      </div>
     </div>
   );
 }

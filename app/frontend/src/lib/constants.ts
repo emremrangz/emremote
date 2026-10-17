@@ -65,7 +65,7 @@ export const KEYBOARD_LAYOUTS: { value: string; label: string }[] = [
   ["failsafe", "Unicode fallback (Windows; last resort)"],
 ].map(([value, label]) => ({ value, label }));
 
-export const DEFAULT_RDP: RDPSettings = {
+const DEFAULT_RDP: RDPSettings = {
   jump_connection_id: "",
   security: "any",
   ignore_cert: false,
@@ -96,7 +96,7 @@ export const DEFAULT_RDP: RDPSettings = {
   preconnection_id: 0,
 };
 
-export const DEFAULT_VNC: VNCSettings = {
+const DEFAULT_VNC: VNCSettings = {
   jump_connection_id: "",
   color_depth: 24,
   quality_level: -1,
@@ -127,7 +127,7 @@ export const DEFAULT_SSH: SSHSettings = {
   read_only: false,
 };
 
-export const DEFAULT_TELNET: TelnetSettings = {
+const DEFAULT_TELNET: TelnetSettings = {
   jump_connection_id: "",
   font_name: "monospace",
   font_size: 12,
@@ -249,7 +249,7 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
 
 // ---- Terminal appearance (SSH and Telnet) ----
 // Colors mirror the palettes the server sends to guacd (internal/api/themes.go); they only draw the swatches.
-export interface TerminalTheme {
+interface TerminalTheme {
   value: string;
   label: string;
   fg: string;
