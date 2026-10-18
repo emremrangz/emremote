@@ -89,6 +89,30 @@ await page.waitForTimeout(800);
 await shot("search");
 await page.keyboard.press("Escape");
 
+// ---- an SSH session: the terminal themes menu, and the same session as a quick view over the device page ----
+{
+  await page.goto(`${BASE}/connect/${conns["web-01"].ssh}`);
+  await page.getByTitle("Connected").waitFor({ timeout: 40000 });
+  await page.waitForTimeout(2500);
+  await page.getByRole("toolbar", { name: "Session toolbar" }).getByRole("button", { name: "Terminal appearance" }).click();
+  await page.waitForTimeout(600);
+  await shot("terminal-themes");
+  await page.keyboard.press("Escape");
+  await page.goto(`${BASE}/devices/${ids.web}`);
+  await page.waitForTimeout(1500);
+  await page.getByRole("button", { name: /Quick view/ }).click();
+  const qv = page.getByRole("region", { name: "Quick view" });
+  await qv.getByTitle("Connected").waitFor({ timeout: 40000 });
+  await page.waitForTimeout(2500);
+  const box = await qv.locator("[aria-label^='Remote screen']").boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.type("uptime && hostname", { delay: 25 });
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(1500);
+  await shot("quick-view");
+  await qv.getByRole("button", { name: "Close quick view" }).click();
+}
+
 // ---- workspace: two shells side by side ----
 await page.goto(`${BASE}/devices`);
 await page.getByRole("heading", { name: "All devices" }).waitFor();
