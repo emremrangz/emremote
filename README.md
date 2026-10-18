@@ -81,11 +81,24 @@ SSH or Telnet) and save the sign-in. [docs/CONNECTIONS.md](docs/CONNECTIONS.md) 
 on Windows, macOS and Linux. Limit which networks emremote may reach with `EMREMOTE_ALLOWED_TARGET_NETWORKS`
 in `.env` (it defaults to private ranges).
 
-**Update:**
+**Update.** Administrators see **Update available** in the sidebar when a newer release exists. Two ways to install it:
 
 ```bash
-~/emremote/scripts/update.sh                    # backup, pull, restart, health check; run it from any folder
+~/emremote/scripts/update.sh                    # on the server: backup, pull, restart, health check; run it from any folder
 ```
+
+or from the browser: the same notice opens a window with an **Update now** button that backs up the database,
+downloads the new version, restarts, checks that it is healthy (going back to the old version if not) and
+reloads the page. That button needs the **optional updater**, which is **off by default** on purpose: it is a small
+extra container that holds the Docker socket, which is root-equivalent on the host. emremote itself never gets the
+socket, and the updater only reacts to a request file and runs the same fixed steps each time. To turn it on:
+
+```bash
+echo 'COMPOSE_PROFILES=updater' >> .env && docker compose up -d     # in the install folder
+```
+
+Without it the window shows the command to run on the server instead. Details and limits:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#updating-from-the-interface-optional).
 
 **Back up:** `scripts/backup.sh`.
 
