@@ -14,7 +14,7 @@ type State =
 interface AuthCtx {
   state: State;
   /** Resolves with a challenge when the account needs a second factor; then call login2fa. */
-  login: (username: string, password: string) => Promise<{ challenge: string } | null>;
+  login: (username: string, password: string, remember?: boolean) => Promise<{ challenge: string } | null>;
   login2fa: (challenge: string, code: string) => Promise<void>;
   setup: (token: string, username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -63,8 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthCtx = {
     state,
     refresh,
-    login: async (username, password) => {
-      const r = await post<Me | { two_factor_required: true; challenge: string }>("/api/auth/login", { username, password });
+    login: async (username, password, remember = false) => {
+      const r = await post<Me | { two_factor_required: true; challenge: string }>("/api/auth/login", { username, password, remember });
       if ("two_factor_required" in r) return { challenge: r.challenge };
       accept(r);
       return null;

@@ -53,7 +53,7 @@ await shot("01-login");
 await page.getByLabel("Username").fill(ADMIN_USER);
 await page.getByLabel("Password").fill(ADMIN_PASSWORD);
 await page.getByRole("button", { name: "Sign in" }).click();
-await page.getByRole("heading", { name: "Overview" }).waitFor();
+await page.getByRole("button", { name: "Quick connect" }).waitFor();
 check("sign in through the UI", true);
 // Remove leftovers from earlier runs.
 await page.evaluate(async () => {
@@ -72,8 +72,32 @@ await page.evaluate(async () => {
     if (g.name === "Lab") await fetch(`/api/groups/${g.id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } });
 });
 await page.reload();
-await page.getByRole("heading", { name: "Overview" }).waitFor();
+await page.getByRole("button", { name: "Quick connect" }).waitFor();
 await shot("02-overview-empty");
+
+// --- The terminal sign-in: login, Enter, password, Enter, remember me ---
+{
+  const c2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const p2 = await c2.newPage();
+  await p2.goto(BASE);
+  await p2.getByLabel("Username").fill(ADMIN_USER);
+  await p2.keyboard.press("Enter");
+  await p2.getByLabel("Password").waitFor({ state: "visible" });
+  await p2.getByLabel("Password").fill(ADMIN_PASSWORD);
+  await p2.keyboard.press("Enter");
+  await p2.getByLabel("Remember me").waitFor({ timeout: 5000 });
+  await p2.getByLabel("Remember me").fill("maybe");
+  await p2.keyboard.press("Enter");
+  const bad = await p2.getByRole("alert").textContent();
+  await p2.getByLabel("Remember me").fill("yes");
+  await p2.keyboard.press("Enter");
+  await p2.getByRole("link", { name: "Statistics" }).waitFor({ timeout: 15000 });
+  const cookie = (await c2.cookies()).find((k) => k.httpOnly);
+  const days = cookie ? (cookie.expires - Date.now() / 1000) / 86400 : 0;
+  check("the sign-in is typed line by line and asks 'remember me'", /yes or no/.test(bad), bad);
+  check("answering yes keeps the browser signed in for about 30 days", days > 29 && days < 31, `${days.toFixed(2)} days`);
+  await c2.close();
+}
 
 // --- Dialogs open centred, without sideways movement ---
 {
@@ -610,7 +634,7 @@ await page.evaluate(async (ids) => {
 // --- Quick connect from Overview (nothing saved) ---
 {
   await page.goto(`${BASE}/`);
-  await page.getByRole("heading", { name: "Overview" }).waitFor();
+  await page.getByRole("button", { name: "Quick connect" }).waitFor();
   const before = await page.evaluate(async () => (await (await fetch("/api/connections")).json()).length);
   await page.getByRole("button", { name: "Quick connect" }).click();
   const dlg = page.getByRole("dialog");
@@ -689,7 +713,7 @@ await page.evaluate(async (ids) => {
   await page.getByRole("heading", { name: "All devices" }).waitFor();
   const launchSSH = async () => {
     await page.getByRole("row", { name: /Lab workstation/ }).getByRole("button", { name: /Connect/ }).click();
-    await page.getByRole("menuitem", { name: /SSH/ }).click();
+    await page.getByRole("menuitem", { name: /SSH/ }).first().click();
   };
   const popup = ctx.waitForEvent("page");
   await launchSSH();
@@ -823,25 +847,36 @@ await page.evaluate(async (ids) => {
   check("the floating file button is draggable and stays on screen", Math.abs(b1.x - b0.x) > 200 && b1.x >= 0 && b1.y + b1.height <= 900, `${Math.round(b0.x)},${Math.round(b0.y)} -> ${Math.round(b1.x)},${Math.round(b1.y)}`);
   // Screenshots: the whole screen, and a dragged area, both downloaded straight from the browser
   const { statSync } = await import("node:fs");
-  const dlFull = rp.waitForEvent("download");
-  await rp.getByRole("button", { name: "Screenshot" }).click();
-  await rp.getByRole("menuitem", { name: "Whole screen" }).click();
-  const shotFull = await dlFull;
-  const fullSize = statSync(await shotFull.path()).size;
-  check("a whole-screen screenshot is downloaded as a PNG", /\.png$/.test(shotFull.suggestedFilename()) && fullSize > 1000, `${shotFull.suggestedFilename()} ${fullSize} bytes`);
-  await rp.getByRole("button", { name: "Screenshot" }).click();
-  await rp.getByRole("menuitem", { name: "Select an area…" }).click();
-  await rp.getByText(/Drag over the part of the screen/).waitFor();
-  const dlArea = rp.waitForEvent("download");
-  await rp.mouse.move(250, 250);
-  await rp.mouse.down();
-  await rp.mouse.move(650, 480, { steps: 6 });
-  await rp.mouse.up();
-  const shotArea = await dlArea;
-  const areaSize = statSync(await shotArea.path()).size;
-  check("a selected area is downloaded as a smaller PNG", areaSize > 200 && areaSize < fullSize, `${areaSize} < ${fullSize}`);
-  await rp.getByText(/Sent: /).waitFor({ timeout: 15000 });
-  await shot("38-sent-to-remote-drive", rp);
+  try {
+    const dlFull = rp.waitForEvent("download", { timeout: 15000 });
+    dlFull.catch(() => undefined);
+    await rp.getByRole("button", { name: "Screenshot" }).click();
+    await rp.screenshot({ path: `${SHOTS}/38x-screenshot-menu.png` });
+    await rp.getByRole("menuitem", { name: "Whole screen" }).click();
+    const shotFull = await dlFull.catch(async (e) => {
+      await rp.screenshot({ path: `${SHOTS}/38y-screenshot-failed.png` });
+      console.log("DIAGNOSTIC console errors:", JSON.stringify(consoleErrors.slice(-8)));
+      console.log("DIAGNOSTIC toasts/text:", JSON.stringify((await rp.locator("[role=status], [role=alert], [data-sonner-toast]").allInnerTexts()).slice(0, 5)));
+      throw e;
+    });
+    const fullSize = statSync(await shotFull.path()).size;
+    check("a whole-screen screenshot is downloaded as a PNG", /\.png$/.test(shotFull.suggestedFilename()) && fullSize > 1000, `${shotFull.suggestedFilename()} ${fullSize} bytes`);
+    await rp.getByRole("button", { name: "Screenshot" }).click();
+    await rp.getByRole("menuitem", { name: "Select an area…" }).click();
+    await rp.getByText(/Drag over the part of the screen/).waitFor();
+    const dlArea = rp.waitForEvent("download");
+    await rp.mouse.move(250, 250);
+    await rp.mouse.down();
+    await rp.mouse.move(650, 480, { steps: 6 });
+    await rp.mouse.up();
+    const shotArea = await dlArea;
+    const areaSize = statSync(await shotArea.path()).size;
+    check("a selected area is downloaded as a smaller PNG", areaSize > 200 && areaSize < fullSize, `${areaSize} < ${fullSize}`);
+    await rp.getByText(/Sent: /).waitFor({ timeout: 15000 });
+    await shot("38-sent-to-remote-drive", rp);
+  } catch (e) {
+    check("screenshots of the remote screen are downloaded", false, String(e.message ?? e).split("\n")[0]);
+  }
   // A pasted image (no text on the clipboard) takes the same path
   await rp.evaluate(async () => {
     const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));

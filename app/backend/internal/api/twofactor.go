@@ -32,6 +32,7 @@ type challenge struct {
 	ip       string
 	expires  time.Time
 	attempts int
+	remember bool
 }
 
 type challengeStore struct {
@@ -41,10 +42,10 @@ type challengeStore struct {
 
 func newChallengeStore() *challengeStore { return &challengeStore{m: map[string]*challenge{}} }
 
-func (c *challengeStore) put(userID, password, ip string) string {
+func (c *challengeStore) put(userID, password, ip string, remember bool) string {
 	tok := auth.RandomToken(32)
 	c.mu.Lock()
-	c.m[auth.HashToken(tok)] = &challenge{userID: userID, password: []byte(password), ip: ip, expires: time.Now().Add(challengeTTL)}
+	c.m[auth.HashToken(tok)] = &challenge{userID: userID, password: []byte(password), ip: ip, remember: remember, expires: time.Now().Add(challengeTTL)}
 	c.mu.Unlock()
 	return tok
 }
@@ -163,9 +164,10 @@ func (s *Server) handleLogin2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	password := string(ch.password)
+	remember := ch.remember
 	s.challenges.finish(req.Challenge)
 	s.limiter.Succeed(uname)
-	s.completeLogin(w, r, user, password, factor)
+	s.completeLogin(w, r, user, password, factor, remember)
 }
 
 // ---- Managing your own second factor ----

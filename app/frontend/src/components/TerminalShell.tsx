@@ -26,12 +26,12 @@ export function TerminalShell({
   const host = window.location.host;
   const secure = window.location.protocol === "https:";
   return (
-    <div className="login-bg relative flex min-h-full items-center justify-center px-4 py-12">
+    <div className="login-bg flex min-h-full items-center justify-center px-4 py-12">
       <form
         onSubmit={onSubmit}
         noValidate
         className={clsx(
-          "w-full max-w-[680px] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0e13] shadow-[0_40px_100px_-24px_rgba(0,0,0,0.9),0_0_0_1px_rgba(126,231,135,0.05),0_0_80px_-30px_rgba(126,231,135,0.25)] animate-fade-in",
+          "w-full max-w-[760px] overflow-hidden rounded-2xl border border-white/10 bg-[#0a0e13] shadow-[0_40px_100px_-24px_rgba(0,0,0,0.9),0_0_0_1px_rgba(126,231,135,0.05),0_0_80px_-30px_rgba(126,231,135,0.25)] animate-fade-in",
           shaking && "term-shake",
         )}
         onAnimationEnd={(e) => e.target === e.currentTarget && onShakeEnd?.()}
@@ -47,6 +47,15 @@ export function TerminalShell({
           <span className="flex-1 truncate px-3 text-center font-mono text-xs text-white/50">
             emremote@{host}: {title}
           </span>
+          <a
+            href="https://github.com/emremrangz/emremote"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 font-mono text-[11px] text-white/40 transition-colors hover:text-white/80"
+            title="emremote on GitHub"
+          >
+            <Github className="h-3.5 w-3.5" /> GitHub
+          </a>
           <span className="flex items-center gap-1.5 font-mono text-[11px] text-white/40" title={secure ? "Encrypted connection (HTTPS)" : "Connection is not encrypted"}>
             <span className={clsx("h-1.5 w-1.5 rounded-full", secure ? "bg-[#7ee787]" : "bg-[#e3b341]")} />
             {secure ? "TLS" : "plain"}
@@ -56,14 +65,6 @@ export function TerminalShell({
           {children}
         </div>
       </form>
-      <a
-        href="https://github.com/emremrangz/emremote"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="absolute bottom-4 right-4 flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 font-mono text-[11px] text-white/50 transition-colors hover:border-white/25 hover:text-white/80"
-      >
-        <Github className="h-3.5 w-3.5" /> GitHub
-      </a>
     </div>
   );
 }

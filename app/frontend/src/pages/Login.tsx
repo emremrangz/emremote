@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import clsx from "clsx";
 import { TerminalShell, TermPrompt, TERM_FIELD } from "@/components/TerminalShell";
+import { Neofetch, type About } from "@/components/Neofetch";
 import { useAuth } from "@/lib/auth";
 import { ApiError, errorMessage } from "@/lib/api";
 
@@ -12,6 +13,11 @@ export default function LoginPage() {
   const notice = state.status === "anonymous" ? state.notice : undefined;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  // The sign-in is typed line by line, like a terminal: login, password, then "remember me".
+  const [step, setStep] = useState<"user" | "pass" | "remember">("user");
+  const [rememberAnswer, setRememberAnswer] = useState("");
+  const rememberRef = useRef<HTMLInputElement>(null);
+  const [about, setAbout] = useState<About | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
@@ -28,6 +34,19 @@ export default function LoginPage() {
   const [recovery, setRecovery] = useState(false);
   const [shaking, setShaking] = useState(false);
   const now = new Date();
+
+  // The facts next to the logo come from the server; the screen works without them.
+  useEffect(() => {
+    let live = true;
+    fetch("/api/about", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((a) => live && a && setAbout(a))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  const rememberDays = about?.remember_days ?? 0;
 
   // A real check, not decoration: is the server answering?
   useEffect(() => {
@@ -55,9 +74,48 @@ export default function LoginPage() {
   useEffect(() => {
     if (busy) return;
     if (challenge) codeRef.current?.focus();
-    else if (error) (username.trim() ? passRef : userRef).current?.focus();
+    else if (error) (step === "remember" ? rememberRef : username.trim() ? passRef : userRef).current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, error, challenge]);
+  }, [busy, error, challenge, step]);
+
+  // The real sign-in. The button calls it directly (all lines as they are now); Enter reaches it after the last line.
+  const signIn = async () => {
+    if (busy) return;
+    if (!username.trim()) {
+      setError("Username is required.");
+      setStep("user");
+      userRef.current?.focus();
+      return;
+    }
+    if (!password) {
+      setError("Password is required.");
+      setStep("pass");
+      passRef.current?.focus();
+      return;
+    }
+    const answer = rememberAnswer.trim().toLowerCase();
+    if (answer !== "" && !["y", "yes", "n", "no"].includes(answer)) {
+      setError("Type yes or no.");
+      rememberRef.current?.focus();
+      return;
+    }
+    const remember = rememberDays > 0 && (answer === "y" || answer === "yes");
+    setBusy(true);
+    setError("");
+    try {
+      const r = await login(username, password, remember);
+      if (r) {
+        setChallenge(r.challenge);
+        setCode("");
+      }
+    } catch (err) {
+      setError(errorMessage(err));
+      setPassword("");
+      setStep("pass");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -88,36 +146,38 @@ export default function LoginPage() {
     }
     if (!username.trim()) {
       setError("Username is required.");
+      setStep("user");
       userRef.current?.focus();
+      return;
+    }
+    // Enter on the login line asks for the password.
+    if (step === "user") {
+      setError("");
+      setStep("pass");
+      window.setTimeout(() => passRef.current?.focus(), 0);
       return;
     }
     if (!password) {
       setError("Password is required.");
+      setStep("pass");
       passRef.current?.focus();
       return;
     }
-    setBusy(true);
-    setError("");
-    try {
-      const r = await login(username, password);
-      if (r) {
-        setChallenge(r.challenge);
-        setCode("");
-      }
-    } catch (err) {
-      setError(errorMessage(err));
-      setPassword("");
-    } finally {
-      setBusy(false);
+    // Enter on the password line asks whether to stay signed in (when the server offers that).
+    if (step === "pass" && rememberDays > 0) {
+      setError("");
+      setStep("remember");
+      window.setTimeout(() => rememberRef.current?.focus(), 0);
+      return;
     }
+    await signIn();
   };
 
-  // Enter on the login line moves to the password line, like a real terminal.
+  // Tab on the login line behaves like Enter, as in a terminal.
   const onUserKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
+    if (e.key === "Tab" && !e.shiftKey && step === "user" && username.trim()) {
       e.preventDefault();
-      if (username.trim()) passRef.current?.focus();
-      else setError("Username is required.");
+      void submit();
     }
   };
 
@@ -131,12 +191,11 @@ export default function LoginPage() {
       shaking={shaking}
       onShakeEnd={() => setShaking(false)}
       onSubmit={submit}
-      onBackgroundClick={() => (challenge ? codeRef : username ? passRef : userRef).current?.focus()}
+      onBackgroundClick={() => (challenge ? codeRef : step === "remember" ? rememberRef : step === "pass" ? passRef : userRef).current?.focus()}
     >
-          <p data-term className="term-line mb-1 flex items-baseline gap-3" style={{ "--d": "0ms" } as React.CSSProperties}>
-            <span className="bg-gradient-to-r from-[#7ee787] to-[#79c0ff] bg-clip-text text-2xl font-bold tracking-tight text-transparent">emremote</span>
-            <span className="text-white/35">self-hosted remote access</span>
-          </p>
+          <Neofetch about={about} host={host} secure={secure} />
+          {/* Enter on any line submits the form (the visible button only clicks), so the form needs a default button. */}
+          <button type="submit" tabIndex={-1} aria-hidden="true" className="sr-only" />
           <p data-term className="term-line text-white/45" style={{ "--d": "120ms" } as React.CSSProperties}>
             <span className={secure ? "text-[#7ee787]" : "text-[#e3b341]"}>{secure ? "[ ok ]" : "[warn]"}</span>{" "}
             {secure ? `encrypted connection to ${host}` : "this connection is not encrypted; use https on untrusted networks"}
@@ -157,7 +216,7 @@ export default function LoginPage() {
             )}
           </p>
           <p data-term className="term-line text-white/45" style={{ "--d": "360ms" } as React.CSSProperties}>
-            <span className="text-white/40">[ -- ]</span> {now.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · Enter your credentials and press Enter.
+            <span className="text-white/40">[ -- ]</span> {now.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · type each answer and press Enter.
           </p>
           <div data-term className="h-3" />
 
@@ -172,6 +231,7 @@ export default function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={onUserKey}
+              onFocus={() => !busy && !challenge && step !== "user" && setStep("user")}
               autoComplete="username"
               autoFocus
               autoCapitalize="off"
@@ -179,7 +239,11 @@ export default function LoginPage() {
               disabled={busy || !!challenge}
             />
           </label>
-          <label className="term-line flex items-center gap-3" style={{ "--d": "560ms" } as React.CSSProperties}>
+          {/* Hidden (but present, so password managers can fill it) until the login line was confirmed with Enter. */}
+          <label
+            className={clsx("flex items-center gap-3", step === "user" && !challenge ? "pointer-events-none absolute -z-10 w-64 opacity-0" : "term-line")}
+            style={{ "--d": "0ms" } as React.CSSProperties}
+          >
             {prompt("password")}
             <input
               ref={passRef}
@@ -188,6 +252,7 @@ export default function LoginPage() {
               className={clsx(field, !reveal && "tracking-[0.2em]")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => !busy && !challenge && step === "remember" && setStep("pass")}
               autoComplete="current-password"
               disabled={busy || !!challenge}
             />
@@ -203,6 +268,26 @@ export default function LoginPage() {
               {reveal ? "hide" : "show"}
             </button>
           </label>
+          {step === "remember" && rememberDays > 0 && !challenge && (
+            <div className="term-line space-y-1">
+              <label className="flex items-center gap-3">
+                {prompt("remember me (yes/no)")}
+                <input
+                  ref={rememberRef}
+                  aria-label="Remember me"
+                  className={field}
+                  value={rememberAnswer}
+                  onChange={(e) => setRememberAnswer(e.target.value)}
+                  placeholder="no"
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  disabled={busy}
+                />
+              </label>
+              <p className="text-xs text-white/40"># yes keeps this browser signed in for {rememberDays} days with a cookie. Do not use it on a shared computer.</p>
+            </div>
+          )}
           {challenge && (
             <div className="term-line space-y-2 pt-1">
               <label className="flex items-center gap-3">
@@ -294,16 +379,26 @@ export default function LoginPage() {
           )}
 
           <div data-term className="flex flex-wrap items-center justify-between gap-3 pt-5">
-            <p data-term className="max-w-[60%] text-xs leading-5 text-white/30">
-              # forgot it? on the host run:{" "}
-              <span className="text-white/50">docker compose exec emremote /app/emremote reset-password admin</span>
-            </p>
+            <div data-term className="min-w-0 text-xs leading-5 text-white/30">
+              <p># locked out, or time to update? on the server, in the install folder:</p>
+              {[
+                ["reset password", "docker compose exec emremote /app/emremote reset-password admin"],
+                ["reset 2FA", "docker compose exec emremote /app/emremote reset-2fa admin"],
+                ["update", "scripts/update.sh"],
+              ].map(([label, cmd]) => (
+                <p key={label} className="flex flex-wrap gap-x-2">
+                  <span className="w-[7.5rem] shrink-0 text-white/40">{label}</span>
+                  <span className="break-all text-white/55">{cmd}</span>
+                </p>
+              ))}
+            </div>
             <div className="ml-auto flex items-center gap-3">
               <span className="hidden text-[11px] text-white/30 sm:inline">
-                <kbd className="rounded border border-white/15 px-1">Tab</kbd> next · <kbd className="rounded border border-white/15 px-1">Enter</kbd> sign in
+                <kbd className="rounded border border-white/15 px-1">Enter</kbd> next line
               </span>
               <button
-                type="submit"
+                type={challenge ? "submit" : "button"}
+                onClick={challenge ? undefined : () => void signIn()}
                 disabled={busy}
                 className="rounded-md border border-[#7ee787]/40 bg-[#7ee787]/10 px-3.5 py-1.5 text-xs font-semibold text-[#7ee787] shadow-[0_0_24px_-8px_rgba(126,231,135,0.6)] transition-colors hover:bg-[#7ee787]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7ee787]/50 disabled:opacity-50"
               >

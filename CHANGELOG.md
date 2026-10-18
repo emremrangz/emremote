@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.1.10 (2026-10-18)
 
+- **Sign-in screen:** a neofetch-style header with the emremote logo and facts about the installation (version,
+  Docker or other runtime, container OS, architecture, Go version, uptime; `EMREMOTE_LOGIN_INFO=false` hides them).
+  The login is typed line by line like in a terminal: login, Enter, password, Enter, then **remember me (yes/no)**.
+- **Remember me:** a yes keeps the browser signed in for 30 days (`EMREMOTE_REMEMBER_DAYS`, `0` turns it off; at most
+  7 days unused) with a cookie, so people do not have to sign in again all the time.
+- The GitHub link sits in the title bar of the terminal window. The hints at the bottom now also show how to reset
+  two-factor and how to update from the server.
 - Removed code that nothing used (found with Knip and Go's deadcode); Knip now runs in CI so unused code is caught early.
 
 ## 0.1.9 (2026-10-17)
@@ -11,7 +18,6 @@
   downloads the new image, restarts, checks that it is healthy (and goes back to the old version if not), shows the
   progress, and reloads the page afterwards. See docs/DEPLOYMENT.md for what the updater can do and why it is off by default.
 - Images carry their version in the `org.opencontainers.image.version` label.
-
 - **Quick view:** next to Connect there is now a button (and a menu section) that opens the session in a large
   window on top of the current page, without leaving it or opening another browser window. Closing it
   ends the session; "Open in window" moves it to the workspace. Escape goes to the remote computer, not to

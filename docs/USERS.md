@@ -60,6 +60,14 @@ administrator's password at a host they control.
 At least one active administrator must always exist, and you cannot disable, demote or delete your
 own account.
 
+## Signing in
+
+The sign-in screen is a terminal: type the login and press Enter, then the password and press Enter, then
+answer **remember me (yes/no)**. Enter on an empty answer means no. A yes keeps that browser signed in for 30
+days with a cookie (`EMREMOTE_REMEMBER_DAYS`, `0` removes the question); use it only on your own computer. With
+two-factor on, the code line follows. Clicking a line above lets you change it. Saved passwords are locked when
+emremote restarts, so everyone signs in again after an update, remembered or not.
+
 ## Two-factor authentication
 
 Everyone can turn on an authenticator-app code under **Settings → Two-factor authentication**: scan

@@ -152,7 +152,7 @@ func (s *Server) Background(ctx context.Context) {
 		case <-audit.C:
 			s.pruneAudit(ctx)
 		case <-t.C:
-			if n, err := s.store.DeleteExpiredSessions(ctx, s.cfg.SessionIdle); err != nil {
+			if n, err := s.store.DeleteExpiredSessions(ctx, s.cfg.SessionIdle, s.cfg.RememberIdle); err != nil {
 				slog.Warn("session cleanup failed", "error", err)
 			} else if n > 0 {
 				slog.Info("removed expired sessions", "count", n)
@@ -200,6 +200,7 @@ func (s *Server) Handler() http.Handler {
 	// Unauthenticated
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /api/setup", s.handleSetupStatus)
+	mux.HandleFunc("GET /api/about", s.handleAbout)
 	mux.HandleFunc("POST /api/setup", s.handleSetup)
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/auth/login/2fa", s.handleLogin2FA)

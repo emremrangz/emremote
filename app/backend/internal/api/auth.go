@@ -70,7 +70,11 @@ func (s *Server) loadSession(r *http.Request) (*store.Session, *store.User, erro
 		return nil, nil, err
 	}
 	now := time.Now()
-	if now.After(sess.ExpiresAt) || now.Sub(sess.LastSeenAt) > s.cfg.SessionIdle {
+	idle := s.cfg.SessionIdle
+	if sess.Remember {
+		idle = s.cfg.RememberIdle
+	}
+	if now.After(sess.ExpiresAt) || now.Sub(sess.LastSeenAt) > idle {
 		_ = s.store.DeleteSession(r.Context(), sess.ID)
 		return nil, nil, errors.New("session expired")
 	}
@@ -120,13 +124,20 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.Handler {
 	})
 }
 
-func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user *store.User) (*store.Session, error) {
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user *store.User, remember bool) (*store.Session, error) {
 	token := auth.RandomToken(32)
+	ttl := s.cfg.SessionTTL
+	// "Remember me" only counts when the operator allows it.
+	remember = remember && s.cfg.RememberTTL > 0
+	if remember {
+		ttl = s.cfg.RememberTTL
+	}
 	sess := &store.Session{
+		Remember:  remember,
 		ID:        auth.HashToken(token),
 		UserID:    user.ID,
 		CSRFToken: auth.RandomToken(32),
-		ExpiresAt: time.Now().Add(s.cfg.SessionTTL),
+		ExpiresAt: time.Now().Add(ttl),
 		IP:        s.clientIP(r),
 		UserAgent: truncate(r.UserAgent(), 300),
 	}
@@ -235,7 +246,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "auth.setup", "user", user.ID, user.Username, true, nil)
-	sess, err := s.startSession(w, r, user)
+	sess, err := s.startSession(w, r, user, false)
 	if err != nil {
 		writeStoreError(w, r, err, "session")
 		return
@@ -257,6 +268,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Remember bool   `json:"remember"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -302,17 +314,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if user.TwoFactor {
 		// The password is right; the second factor decides. Failures there count
 		// against the same limiter, so the counters are only reset after it.
-		ch := s.challenges.put(user.ID, req.Password, ip)
+		ch := s.challenges.put(user.ID, req.Password, ip, req.Remember)
 		writeJSON(w, http.StatusAccepted, map[string]any{"two_factor_required": true, "challenge": ch, "expires_in": int(challengeTTL.Seconds())})
 		return
 	}
 	s.limiter.Succeed(uname)
-	s.completeLogin(w, r, user, req.Password, "")
+	s.completeLogin(w, r, user, req.Password, "", req.Remember)
 }
 
 // completeLogin unlocks the vault, starts the session and answers the sign-in
 // request. factor names the second factor used ("" when none).
-func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, user *store.User, password, factor string) {
+func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, user *store.User, password, factor string, remember bool) {
 	r = r.WithContext(context.WithValue(r.Context(), ctxUser, user))
 	if err := s.openVault(r, user, password); err != nil {
 		if errors.Is(err, errVaultNeedsAdmin) {
@@ -327,15 +339,18 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, user *sto
 			"Your password is correct, but saved passwords could not be unlocked (was EMREMOTE_ENCRYPTION_KEY changed?). See TROUBLESHOOTING.md: reset-password --forget-saved-passwords.")
 		return
 	}
-	sess, err := s.startSession(w, r, user)
+	sess, err := s.startSession(w, r, user, remember)
 	if err != nil {
 		writeStoreError(w, r, err, "session")
 		return
 	}
 	_ = s.store.TouchLogin(r.Context(), user.ID)
-	var details map[string]any
+	details := map[string]any{}
 	if factor != "" {
-		details = map[string]any{"second_factor": factor}
+		details["second_factor"] = factor
+	}
+	if sess.Remember {
+		details["remember"] = true
 	}
 	s.audit(r, "auth.login", "user", user.ID, user.Username, true, details)
 	writeJSON(w, http.StatusOK, meResponse{User: user, CSRFToken: sess.CSRFToken, ExpiresAt: sess.ExpiresAt})

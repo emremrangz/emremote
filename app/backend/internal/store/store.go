@@ -166,19 +166,21 @@ type Session struct {
 	ExpiresAt  time.Time `json:"expires_at"`
 	IP         string    `json:"ip"`
 	UserAgent  string    `json:"user_agent"`
+	// Remember marks a session the user asked to keep ("remember me"): it has its own, longer limits.
+	Remember bool `json:"remember"`
 }
 
 func (s *Store) CreateSession(ctx context.Context, sess *Session) error {
-	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO sessions (id, user_id, csrf_token, expires_at, ip, user_agent)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING created_at, last_seen_at`,
-		sess.ID, sess.UserID, sess.CSRFToken, sess.ExpiresAt, sess.IP, sess.UserAgent).Scan(&sess.CreatedAt, &sess.LastSeenAt))
+	return mapErr(s.pool.QueryRow(ctx, `INSERT INTO sessions (id, user_id, csrf_token, expires_at, ip, user_agent, remember)
+		VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING created_at, last_seen_at`,
+		sess.ID, sess.UserID, sess.CSRFToken, sess.ExpiresAt, sess.IP, sess.UserAgent, sess.Remember).Scan(&sess.CreatedAt, &sess.LastSeenAt))
 }
 
 func (s *Store) GetSession(ctx context.Context, id string) (*Session, error) {
 	var sess Session
-	err := s.pool.QueryRow(ctx, `SELECT id, user_id, csrf_token, created_at, last_seen_at, expires_at, ip, user_agent
+	err := s.pool.QueryRow(ctx, `SELECT id, user_id, csrf_token, created_at, last_seen_at, expires_at, ip, user_agent, remember
 		FROM sessions WHERE id = $1`, id).Scan(&sess.ID, &sess.UserID, &sess.CSRFToken, &sess.CreatedAt,
-		&sess.LastSeenAt, &sess.ExpiresAt, &sess.IP, &sess.UserAgent)
+		&sess.LastSeenAt, &sess.ExpiresAt, &sess.IP, &sess.UserAgent, &sess.Remember)
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -217,8 +219,9 @@ func (s *Store) ListUserSessions(ctx context.Context, userID string) ([]Session,
 	})
 }
 
-func (s *Store) DeleteExpiredSessions(ctx context.Context, idle time.Duration) (int64, error) {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at <= now() OR last_seen_at <= now() - make_interval(secs => $1)`, idle.Seconds())
+func (s *Store) DeleteExpiredSessions(ctx context.Context, idle, rememberIdle time.Duration) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at <= now()
+		OR last_seen_at <= now() - make_interval(secs => CASE WHEN remember THEN $2::float8 ELSE $1::float8 END)`, idle.Seconds(), rememberIdle.Seconds())
 	if err != nil {
 		return 0, err
 	}
