@@ -43,11 +43,13 @@ type Server struct {
 	shares  *shareStore
 	// jumpNetworks, once an administrator saved them in Settings, replace the environment default.
 	jumpNetworks atomic.Pointer[[]netip.Prefix]
-	access       *accessRegistry
-	drive        *transfer.Drive
-	copies       *copyRegistry
-	quick        *quickRegistry
-	challenges   *challengeStore
+	// sessionLimits, once saved in Settings, replace the environment defaults for sign-in lifetimes.
+	sessionLimits atomic.Pointer[sessionLimits]
+	access        *accessRegistry
+	drive         *transfer.Drive
+	copies        *copyRegistry
+	quick         *quickRegistry
+	challenges    *challengeStore
 
 	setupMu   sync.Mutex
 	setupOpen bool // true while no user exists
@@ -152,7 +154,7 @@ func (s *Server) Background(ctx context.Context) {
 		case <-audit.C:
 			s.pruneAudit(ctx)
 		case <-t.C:
-			if n, err := s.store.DeleteExpiredSessions(ctx, s.cfg.SessionIdle, s.cfg.RememberIdle); err != nil {
+			if n, err := s.store.DeleteExpiredSessions(ctx, s.limits().Idle, s.limits().RememberIdle); err != nil {
 				slog.Warn("session cleanup failed", "error", err)
 			} else if n > 0 {
 				slog.Info("removed expired sessions", "count", n)
@@ -208,6 +210,9 @@ func (s *Server) Handler() http.Handler {
 	// Authenticated
 	a := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, s.requireAuth(h)) }
 	a("GET /api/auth/me", s.handleMe)
+	// The browser asks this in the background to notice that its sign-in ended; unlike every other request it does
+	// not count as activity, so a tab nobody uses still times out.
+	mux.Handle("GET /api/auth/session", s.requireAuthTouch(s.handleSessionCheck, false))
 	a("POST /api/auth/logout", s.handleLogout)
 	a("POST /api/auth/password", s.handleChangePassword)
 	a("GET /api/auth/2fa", s.handleTwoFactorStatus)
@@ -318,6 +323,8 @@ func (s *Server) Handler() http.Handler {
 
 	a("GET /api/settings/jump", s.adminOnly(s.handleGetJumpSettings))
 	a("PUT /api/settings/jump", s.adminOnly(s.handleSetJumpSettings))
+	a("GET /api/settings/sessions", s.adminOnly(s.handleGetSessionLimits))
+	a("PUT /api/settings/sessions", s.adminOnly(s.handleSetSessionLimits))
 
 	a("GET /api/statistics", s.handleStatistics)
 	a("GET /api/audit", s.handleListAudit)
@@ -614,8 +621,8 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"allowed_target_networks": allowed,
 		"denied_target_networks":  denied,
 		"status_check_interval_s": int(s.cfg.StatusCheckInterval.Seconds()),
-		"session_ttl_s":           int(s.cfg.SessionTTL.Seconds()),
-		"session_idle_timeout_s":  int(s.cfg.SessionIdle.Seconds()),
+		"session_ttl_s":           int(s.limits().TTL.Seconds()),
+		"session_idle_timeout_s":  int(s.limits().Idle.Seconds()),
 		"secure_cookies":          s.cfg.CookieSecure,
 		"max_upload_mb":           s.cfg.MaxUploadBytes >> 20,
 		"transfer_drive":          s.drive != nil,

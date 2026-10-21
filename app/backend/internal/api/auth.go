@@ -60,7 +60,9 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter) {
 }
 
 // loadSession resolves the session cookie to a valid session and user.
-func (s *Server) loadSession(r *http.Request) (*store.Session, *store.User, error) {
+// loadSession resolves the cookie to a valid session. touch records the request as activity, which keeps an
+// idle session alive; the browser's background check passes false so a forgotten tab still times out.
+func (s *Server) loadSession(r *http.Request, touch bool) (*store.Session, *store.User, error) {
 	c, err := r.Cookie(s.cookieName())
 	if err != nil || c.Value == "" || len(c.Value) > 128 {
 		return nil, nil, errors.New("no session")
@@ -70,9 +72,10 @@ func (s *Server) loadSession(r *http.Request) (*store.Session, *store.User, erro
 		return nil, nil, err
 	}
 	now := time.Now()
-	idle := s.cfg.SessionIdle
+	lim := s.limits()
+	idle := lim.Idle
 	if sess.Remember {
-		idle = s.cfg.RememberIdle
+		idle = lim.RememberIdle
 	}
 	if now.After(sess.ExpiresAt) || now.Sub(sess.LastSeenAt) > idle {
 		_ = s.store.DeleteSession(r.Context(), sess.ID)
@@ -87,20 +90,31 @@ func (s *Server) loadSession(r *http.Request) (*store.Session, *store.User, erro
 		return nil, nil, errors.New("session expired")
 	}
 	// Coarse-grained activity tracking keeps writes low.
-	if now.Sub(sess.LastSeenAt) > time.Minute {
+	if touch && now.Sub(sess.LastSeenAt) > time.Minute {
 		_ = s.store.TouchSession(r.Context(), sess.ID)
 	}
 	return sess, user, nil
 }
 
 func (s *Server) requireAuth(next http.HandlerFunc) http.Handler {
+	return s.requireAuthTouch(next, true)
+}
+
+func (s *Server) requireAuthTouch(next http.HandlerFunc, touch bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sess, user, err := s.loadSession(r)
+		sess, user, err := s.loadSession(r, touch)
 		if err != nil {
 			if !errors.Is(err, store.ErrNotFound) && err.Error() != "no session" && err.Error() != "session expired" {
 				slog.Error("session lookup failed", "error", err)
 			}
 			s.clearSessionCookie(w)
+			// A cookie that no longer matches a session means the sign-in ended on the server (timed out, signed out
+			// elsewhere, password changed). No cookie at all means the browser did not send one: say nothing then, so
+			// the sign-in screen tells the two apart.
+			if c, cerr := r.Cookie(s.cookieName()); cerr == nil && c.Value != "" {
+				writeError(w, http.StatusUnauthorized, "session_ended", "Your sign-in ended (it timed out or was ended elsewhere). Sign in again.")
+				return
+			}
 			writeError(w, http.StatusUnauthorized, "unauthenticated", "Authentication required")
 			return
 		}
@@ -126,11 +140,12 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.Handler {
 
 func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user *store.User, remember bool) (*store.Session, error) {
 	token := auth.RandomToken(32)
-	ttl := s.cfg.SessionTTL
+	lim := s.limits()
+	ttl := lim.TTL
 	// "Remember me" only counts when the operator allows it.
-	remember = remember && s.cfg.RememberTTL > 0
+	remember = remember && lim.RememberTTL > 0
 	if remember {
-		ttl = s.cfg.RememberTTL
+		ttl = lim.RememberTTL
 	}
 	sess := &store.Session{
 		Remember:  remember,

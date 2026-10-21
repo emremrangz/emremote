@@ -68,6 +68,11 @@ days with a cookie (`EMREMOTE_REMEMBER_DAYS`, `0` removes the question); use it 
 two-factor on, the code line follows. Clicking a line above lets you change it. Saved passwords are locked when
 emremote restarts, so everyone signs in again after an update, remembered or not.
 
+Administrators set how long people stay signed in under **Settings → Sign-in sessions**: how long an unused
+sign-in lasts (changes apply at once), the longest sign-in (applies to new sign-ins) and how long "remember me"
+lasts (0 removes the question). A remote session that is open counts as activity. When a sign-in ends, an open tab
+goes back to the sign-in screen by itself within about 30 seconds.
+
 ## Two-factor authentication
 
 Everyone can turn on an authenticator-app code under **Settings → Two-factor authentication**: scan

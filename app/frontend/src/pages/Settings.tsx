@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route } from "lucide-react";
+import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader, Badge, ErrorState } from "@/components/ui/misc";
 import { Button } from "@/components/ui/Button";
@@ -196,6 +196,111 @@ function JumpHostCard() {
           The jump host itself is an ordinary SSH connection with a saved sign-in, in your normal allowed networks, and its SSH server must allow TCP
           forwarding. Loopback and link-local ranges are never accepted.
         </p>
+        <Button variant="primary" onClick={save} loading={busy} disabled={!loaded}>
+          Save
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+interface SessionLimits {
+  idle_minutes: number;
+  ttl_minutes: number;
+  remember_days: number;
+  saved: boolean;
+  env: { idle_minutes: number; ttl_minutes: number; remember_days: number };
+}
+
+const IDLE_CHOICES: [number, string][] = [
+  [15, "15 minutes"], [30, "30 minutes"], [60, "1 hour"], [120, "2 hours"], [240, "4 hours"], [480, "8 hours"], [1440, "1 day"], [4320, "3 days"], [10080, "7 days"],
+];
+const LIFETIME_CHOICES: [number, string][] = [
+  [60, "1 hour"], [240, "4 hours"], [480, "8 hours"], [720, "12 hours"], [1440, "1 day"], [4320, "3 days"], [10080, "7 days"], [43200, "30 days"],
+];
+const REMEMBER_CHOICES: [number, string][] = [[0, "Off (no remember me)"], [7, "7 days"], [14, "14 days"], [30, "30 days"], [90, "90 days"]];
+
+function minutesLabel(m: number): string {
+  if (m % 1440 === 0) return `${m / 1440} day${m === 1440 ? "" : "s"}`;
+  if (m % 60 === 0) return `${m / 60} hour${m === 60 ? "" : "s"}`;
+  return `${m} minutes`;
+}
+
+/** The listed choices plus the current value when it is none of them (for example set by an environment variable). */
+function withCurrent(choices: [number, string][], current: number, label: (n: number) => string): [number, string][] {
+  return choices.some(([v]) => v === current) ? choices : [...choices, [current, label(current)] as [number, string]].sort((a, b) => a[0] - b[0]);
+}
+
+function SessionLimitsCard() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [loaded, setLoaded] = useState(false);
+  const [v, setV] = useState({ idle_minutes: 120, ttl_minutes: 720, remember_days: 30 });
+  const [fromEnv, setFromEnv] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    get<SessionLimits>("/api/settings/sessions")
+      .then((r) => {
+        setV({ idle_minutes: r.idle_minutes, ttl_minutes: r.ttl_minutes, remember_days: r.remember_days });
+        setFromEnv(!r.saved);
+        setLoaded(true);
+      })
+      .catch((e) => setError(errorMessage(e)));
+  }, []);
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await put("/api/settings/sessions", v);
+      setFromEnv(false);
+      qc.invalidateQueries({ queryKey: keys.system });
+      toast.success("Sign-in limits saved.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card
+      title="Sign-in sessions"
+      description="How long people stay signed in. Open remote sessions count as activity, so someone working in one is not signed out."
+      icon={<Timer className="h-4 w-4" />}
+    >
+      <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Field label="Sign out when unused for" hint="Takes effect at once.">
+            <Select className="input" value={String(v.idle_minutes)} onChange={(e) => setV({ ...v, idle_minutes: Number(e.target.value) })} disabled={!loaded}>
+              {withCurrent(IDLE_CHOICES, v.idle_minutes, minutesLabel).map(([n, l]) => (
+                <option key={n} value={n}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Longest sign-in" hint="Applies to new sign-ins.">
+            <Select className="input" value={String(v.ttl_minutes)} onChange={(e) => setV({ ...v, ttl_minutes: Number(e.target.value) })} disabled={!loaded}>
+              {withCurrent(LIFETIME_CHOICES, v.ttl_minutes, minutesLabel).map(([n, l]) => (
+                <option key={n} value={n}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Remember me" hint="The sign-in screen asks; a yes lasts this long.">
+            <Select className="input" value={String(v.remember_days)} onChange={(e) => setV({ ...v, remember_days: Number(e.target.value) })} disabled={!loaded}>
+              {withCurrent(REMEMBER_CHOICES, v.remember_days, (n) => `${n} days`).map(([n, l]) => (
+                <option key={n} value={n}>
+                  {l}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        {error && <p className="text-xs text-danger">{error}</p>}
+        {fromEnv && <p className="text-xs text-subtle">These are the defaults from the environment (EMREMOTE_SESSION_IDLE_TIMEOUT, EMREMOTE_SESSION_TTL, EMREMOTE_REMEMBER_DAYS). Saving here replaces them.</p>}
+        <p className="text-xs text-subtle">Everyone is also signed out whenever emremote restarts, because saved passwords are locked until someone signs in.</p>
         <Button variant="primary" onClick={save} loading={busy} disabled={!loaded}>
           Save
         </Button>
@@ -427,6 +532,7 @@ export default function SettingsPage() {
         </Card>
         <TerminalCard />
         {isAdmin && <JumpHostCard />}
+        {isAdmin && <SessionLimitsCard />}
         <PasswordCard />
         <Card title="Two-factor authentication" description="Protects your account even if your password leaks." icon={<ShieldCheck className="h-4 w-4" />}>
           <TwoFactorCard />

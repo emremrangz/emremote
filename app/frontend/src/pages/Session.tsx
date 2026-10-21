@@ -393,9 +393,46 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
       };
       let gate: Promise<void> | null = null;
       const queued: any[] = [];
+      // The terminal in the gateway copies a selection when the button is released and pastes on a right click. Like
+      // PuTTY and Windows Terminal, a right click while text is selected must only copy: it is not passed on, and the
+      // selection is cleared; a right click without a selection pastes.
+      const isTerminal = conn.data!.protocol === "ssh" || conn.data!.protocol === "telnet";
+      let leftDownAt: { x: number; y: number } | null = null;
+      let dragged = false;
+      let hasSelection = false;
+      let swallowRight = false;
+      const trackSelection = (e: any) => {
+        const st = e.state;
+        if (e.type === "mousedown" && st.left && !st.right) {
+          leftDownAt = { x: st.x, y: st.y };
+          dragged = false;
+          hasSelection = false; // a new click starts over
+        } else if (leftDownAt && st.left && Math.hypot(st.x - leftDownAt.x, st.y - leftDownAt.y) > 4) {
+          dragged = true;
+        } else if (leftDownAt && !st.left && e.type === "mouseup") {
+          hasSelection = dragged;
+          leftDownAt = null;
+        }
+      };
       const sendMouse = (e: any) => {
         display.showCursor(!nativeCursor);
         const st = e.state;
+        if (isTerminal) {
+          trackSelection(e);
+          if (e.type === "mousedown" && st.right && hasSelection) {
+            // Copy only. A plain left click in place clears the selection.
+            swallowRight = true;
+            hasSelection = false;
+            const at = { x: st.x, y: st.y, left: false, middle: false, right: false, up: false, down: false };
+            client!.sendMouseState({ ...at, left: true, down: true }, true);
+            client!.sendMouseState({ ...at, up: true }, true);
+            return;
+          }
+          if (swallowRight) {
+            if (!st.right) swallowRight = false;
+            return; // the rest of that right click (moves, release) is not passed on either
+          }
+        }
         // While a button is held (e.g. selecting text), let the pointer pass over the toolbar.
         if (st.left || st.middle || st.right) document.body.dataset.remoteDrag = "";
         else delete document.body.dataset.remoteDrag;
@@ -1164,7 +1201,7 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
               </div>
               <p className="mt-2 text-2xs text-subtle">
                 Usually not needed: {isMacClient() ? "⌘V" : "Ctrl+V"} in the session pastes from this computer directly.
-                {protocol === "ssh" || protocol === "telnet" ? " Right-click also pastes; selecting text copies it." : " Right-click → Paste uses the same text."}
+                {protocol === "ssh" || protocol === "telnet" ? " Selecting text copies it. Right-click with text selected only copies; without a selection it pastes." : " Right-click → Paste uses the same text."}
               </p>
             </div>
           </div>

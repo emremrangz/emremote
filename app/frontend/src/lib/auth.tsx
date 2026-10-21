@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         const s = await get<{ setup_required: boolean; token_required?: boolean; setup_blocked?: boolean }>("/api/setup").catch(() => ({ setup_required: false, token_required: false, setup_blocked: false }));
-        setState(s.setup_blocked ? { status: "blocked" } : s.setup_required ? { status: "setup", tokenRequired: !!s.token_required } : { status: "anonymous", notice: e.code === "vault_locked" ? e.message : undefined });
+        setState(s.setup_blocked ? { status: "blocked" } : s.setup_required ? { status: "setup", tokenRequired: !!s.token_required } : { status: "anonymous", notice: e.code === "vault_locked" || e.code === "session_ended" ? e.message : undefined });
       } else {
         // Server unreachable: show login, which will surface the error on submit.
         setState({ status: "anonymous" });
@@ -55,10 +55,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onUnauthorized((code, message) => {
         setCsrfToken("");
         qc.clear();
-        setState((s) => (s.status === "authenticated" ? { status: "anonymous", notice: code === "vault_locked" ? message : undefined } : s));
+        setState((s) => (s.status === "authenticated" ? { status: "anonymous", notice: code === "vault_locked" || code === "session_ended" ? message : "Your sign-in ended. Sign in again to continue." } : s));
       }),
     [qc],
   );
+
+  // A tab nobody touches makes no requests, so it would keep showing the app after the sign-in ended on the server.
+  // Ask in the background (this request does not count as activity) and when the tab is looked at again.
+  const authenticated = state.status === "authenticated";
+  useEffect(() => {
+    if (!authenticated) return;
+    const check = () => {
+      if (document.visibilityState === "hidden" && !document.hasFocus()) return;
+      get("/api/auth/session").catch(() => undefined); // a 401 reaches onUnauthorized below
+    };
+    const t = setInterval(check, 30_000);
+    document.addEventListener("visibilitychange", check);
+    window.addEventListener("focus", check);
+    window.addEventListener("online", check);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", check);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("online", check);
+    };
+  }, [authenticated]);
 
   const value: AuthCtx = {
     state,

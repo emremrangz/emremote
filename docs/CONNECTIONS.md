@@ -122,6 +122,9 @@ on networks you trust, or tunnel it.
   browser hands the text to emremote with that key press, so no permission is needed. emremote puts
   it on the remote clipboard and then sends the remote side's own paste shortcut: Ctrl+V on
   Windows and Linux, ⌘V on macOS, and Ctrl+Shift+V in SSH/Telnet terminals.
+- **SSH and Telnet terminals:** selecting text with the mouse copies it. A right click while text is selected only
+  copies (and clears the selection); a right click with nothing selected pastes. This is how PuTTY and Windows
+  Terminal behave, and it stops a copied command from being typed into the shell again.
 - **Right-click → Paste** on the remote side uses the remote clipboard, which holds whatever you last
   pasted or copied. In Chrome and Edge, emremote also refreshes it from your computer when you
   right-click; the browser asks once whether the site may see the clipboard, and after that it is

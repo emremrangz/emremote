@@ -42,6 +42,9 @@ const jumpSettingKey = "jump_target_networks"
 
 // LoadSettings reads the settings saved in the web interface.
 func (s *Server) LoadSettings(ctx context.Context) {
+	if raw, ok, err := s.store.GetSetting(ctx, sessionLimitsKey); err == nil && ok {
+		s.loadSessionLimits(raw)
+	}
 	raw, ok, err := s.store.GetSetting(ctx, jumpSettingKey)
 	if err != nil || !ok {
 		return

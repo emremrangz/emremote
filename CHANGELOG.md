@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.11 (2026-10-21)
+
+- **Right click in SSH and Telnet terminals:** with text selected it now only copies (and clears the selection) instead of
+  copying and then pasting the text back into the shell; without a selection it pastes, as in PuTTY and Windows Terminal.
+- **A sign-in that ended is noticed:** a tab that nobody touches used to keep showing the app after the server had
+  ended the sign-in (idle timeout, longest sign-in, signed out elsewhere), while connections no longer worked until a
+  refresh. The page now checks in the background every 30 seconds and when you come back to it, and goes to the
+  sign-in screen with a note. The background check does not count as activity, so a forgotten tab still times out.
+- **The sign-in screen says why you are there:** when a sign-in ended on the server it now says so ("Your sign-in ended (it
+  timed out or was ended elsewhere)"), after a restart it says that, and when the browser sent no cookie at all there is no
+  note. That makes it easy to tell a restart, a timeout and a browser that does not keep cookies apart.
+- **Sign-in limits in Settings:** administrators choose how long an unused sign-in lasts, the longest sign-in and how
+  long "remember me" keeps a browser signed in (Settings, "Sign-in sessions"). What is saved replaces the environment
+  defaults; open remote sessions still count as activity.
+
 ## 0.1.10 (2026-10-18)
 
 - **Sign-in screen:** a neofetch-style header with the emremote logo and facts about the installation (version,

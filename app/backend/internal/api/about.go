@@ -43,7 +43,7 @@ func prettyOSName(osRelease string) string {
 }
 
 func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
-	out := aboutInfo{RememberDays: int(s.cfg.RememberTTL.Hours() / 24)}
+	out := aboutInfo{RememberDays: int(s.limits().RememberTTL.Hours() / 24)}
 	if s.cfg.LoginInfo {
 		out.Version = s.version
 		out.Runtime = containerRuntime()
