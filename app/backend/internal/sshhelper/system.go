@@ -205,6 +205,10 @@ func Inspect(ctx context.Context, c *ssh.Client, osHint string) (*SystemInfo, er
 	if osHint == "network" {
 		return InspectNetwork(ctx, c)
 	}
+	if osHint == "esxi" {
+		// ESXi's shell is not a Linux shell and the usual commands do not exist there.
+		return nil, errors.New("a system overview is not available for VMware ESXi")
+	}
 	ctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 	start := time.Now()
@@ -245,6 +249,7 @@ func Inspect(ctx context.Context, c *ssh.Client, osHint string) (*SystemInfo, er
 		out, err = run(ctx, c, "/bin/sh -s", linuxScript)
 		if err == nil {
 			info = ParseLinux(out)
+			markProxmox(ctx, c, info)
 		}
 	case "macos":
 		var out string
@@ -591,4 +596,24 @@ func cleanMAC(s string) string {
 		}
 	}
 	return s
+}
+
+var rePveManager = regexp.MustCompile(`pve-manager/([0-9][0-9.]*)`)
+
+// markProxmox names a Proxmox VE host as such: it is Debian underneath, so the operating system alone would show
+// Debian. The kernel of every Proxmox host carries "-pve"; the version comes from the read-only pveversion command.
+func markProxmox(ctx context.Context, c *ssh.Client, info *SystemInfo) {
+	if info == nil || !strings.Contains(info.Kernel, "-pve") {
+		return
+	}
+	name := "Proxmox VE"
+	if out, err := run(ctx, c, "pveversion", ""); err == nil {
+		if m := rePveManager.FindStringSubmatch(out); m != nil {
+			name += " " + m[1]
+		}
+	}
+	if info.OS != "" {
+		name += " (" + info.OS + ")"
+	}
+	info.OS = name
 }

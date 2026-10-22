@@ -1,4 +1,4 @@
-export type OS = "windows" | "macos" | "linux" | "network" | "other";
+export type OS = "windows" | "macos" | "linux" | "network" | "esxi" | "other";
 export type DeviceType = "desktop" | "laptop" | "server" | "virtual_machine" | "network" | "other";
 export type Protocol = "rdp" | "vnc" | "ssh" | "telnet";
 
@@ -78,8 +78,10 @@ export interface Device {
   description: string;
   notes: string;
   tags: string[];
+  /** The first group; `groups` lists all of them. */
   group_id: string | null;
   group_name: string | null;
+  groups: { id: string; name: string }[];
   favorite: boolean;
   created_at: string;
   updated_at: string;
@@ -90,6 +92,8 @@ export interface Device {
   wol_broadcast: string;
   /** Details read from the device over SSH; empty until first collected. */
   facts: DeviceFacts | Record<string, never>;
+  /** Where the device is, for the map. */
+  location: { label: string; latitude: number; longitude: number } | null;
 }
 
 export interface Virtualization {

@@ -5,6 +5,7 @@ export const OS_LABELS: Record<OS, string> = {
   macos: "macOS",
   linux: "Linux",
   network: "Network",
+  esxi: "VMware ESXi",
   other: "Other",
 };
 
@@ -35,6 +36,7 @@ export const SUGGESTED_PROTOCOLS: Record<OS, Protocol[]> = {
   macos: ["vnc", "ssh"],
   linux: ["ssh", "vnc", "rdp", "telnet"],
   network: ["ssh", "telnet"],
+  esxi: ["ssh"],
   other: ["ssh", "telnet", "vnc", "rdp"],
 };
 
@@ -221,6 +223,10 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   "session.watch.end": "Stopped watching a shared session",
   "device.wake": "Wake-on-LAN packet sent",
   "settings.jump": "Jump host networks changed",
+  "settings.targets": "Allowed target networks changed",
+  "settings.sessions": "Sign-in limits changed",
+  "device.clone": "Device cloned",
+  "system.update": "Update started from the interface",
   "connection.identity_pinned": "Server identity recorded",
   "connection.quick": "Quick connection created",
   "vault.created": "Password vault created",

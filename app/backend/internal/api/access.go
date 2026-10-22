@@ -173,6 +173,16 @@ func (s *Server) getDevice(ctx context.Context, id string) (*store.Device, error
 
 // groupUsable reports whether a group may hold devices of the given owner:
 // shared devices go in shared groups, a member's devices in the member's groups.
+// groupsUsable reports whether every group exists and may be used by a device of owner.
+func (s *Server) groupsUsable(ctx context.Context, ids []string, owner *string) bool {
+	for _, id := range ids {
+		if !s.groupUsable(ctx, id, owner) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) groupUsable(ctx context.Context, groupID string, owner *string) bool {
 	g, err := s.store.GroupOwner(ctx, groupID)
 	if err != nil {

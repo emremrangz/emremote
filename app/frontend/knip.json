@@ -1,5 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "ignore": ["public/theme-init.js", "public/vendor/**"],
+  "ignore": [
+    "public/theme-init.js",
+    "public/vendor/**",
+    "tools/gen-world-map.mjs"
+  ],
   "ignoreDependencies": []
 }

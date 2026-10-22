@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.13 (2026-10-22)
+
+- **A device in several groups:** a device can belong to more than one group (the first is its main group). Every group
+  counts it, a group granted to a person reaches the devices in it, and deleting the main group leaves the next one in
+  charge. JSON exports and imports keep all groups.
+- **VMware ESXi** is a device kind of its own, with the VMware logo. It has no system overview (its shell is not a Linux
+  shell), so that tab is hidden; files over SFTP and terminals work as for any SSH server.
+- **Proxmox VE hosts** show the Proxmox logo and version instead of Debian (found by the "-pve" kernel and `pveversion`);
+  hosts read earlier are read again once.
+
+- **Device locations:** when adding or editing a device you can say where it is: search a city from a built-in list,
+  click the map, or type coordinates. Nothing is sent to a map service.
+- **Map on the Overview page:** the located devices on a world map; devices close to each other become one marker with a
+  count, and a click lists them. Colours follow reachability. The outlines ship with the application (Natural Earth,
+  public domain), so the map also works without internet access.
+- **Clone a device:** "Clone device" (device page menu and the list's row menu) creates a new device of the same kind in
+  the same group with the same tags and place, copies its connection methods and, when the original is yours (or shared and
+  you are an administrator), the saved passwords and keys too. Pinned SSH host keys and RDP certificates are not copied; the
+  clone records its own on the first connection. A member cloning a shared device never receives its saved passwords.
+- Locations are part of the JSON export and import.
+
 ## 0.1.12 (2026-10-22)
 
 - **Allowed target networks in Settings:** administrators add the public servers or networks emremote may connect to

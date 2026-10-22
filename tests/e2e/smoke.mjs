@@ -565,6 +565,94 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   const after = L1b.status === 200 ? await openSession(L1b.m, ssh.data.id, { seconds: 8 }) : { imgBytes: 0, errors: ["login failed"] };
   check("the new password works and saved passwords still unlock", L1b.status === 200 && after.imgBytes > 1000, `login ${L1b.status} img=${after.imgBytes}`);
 
+  // ---- Device locations and cloning ----
+  {
+    const body = (extra) => ({ name: `loc-${stamp2}`, hostname: "", address: TARGET_HOST, os: "linux", device_type: "server", description: "", notes: "", tags: ["e2e"], group_id: null, favorite: false, ...extra });
+    const bad1 = await c.post("/api/devices", body({ location: { label: "x", latitude: 91, longitude: 0 } }));
+    const bad2 = await c.post("/api/devices", body({ location: { label: "x", latitude: 10, longitude: null } }));
+    check("an impossible or half-given location is rejected", bad1.status === 422 && bad2.status === 422, `${bad1.status} ${bad2.status}`);
+    const withLoc = await c.post("/api/devices", body({ location: { label: "Istanbul, Turkey", latitude: 41.01, longitude: 28.98 } }));
+    check("a device is saved with its location", withLoc.status === 201 && withLoc.data.location?.label === "Istanbul, Turkey" && withLoc.data.location?.latitude === 41.01, JSON.stringify(withLoc.data?.location));
+    const keep = await c.put(`/api/devices/${withLoc.data.id}`, body({ description: "changed" }));
+    check("saving without a location keeps the stored one", keep.status === 200 && keep.data.location?.longitude === 28.98);
+    const listed = (await c.get("/api/devices")).data.find((d) => d.id === withLoc.data.id);
+    const exported = JSON.stringify((await c.get("/api/export?format=json")).data);
+    check("the location is in the device list and in the export", listed?.location?.label === "Istanbul, Turkey" && exported.includes("Istanbul, Turkey"));
+    const clear = await c.put(`/api/devices/${withLoc.data.id}`, body({ location: { label: "", latitude: null, longitude: null } }));
+    check("sending an empty location clears it", clear.status === 200 && clear.data.location === null);
+    await c.del(`/api/devices/${withLoc.data.id}`);
+
+    // ---- A device in several groups ----
+    {
+      const ga = (await c.post("/api/groups", { name: `MG-A-${stamp2}`, description: "" })).data;
+      const gb = (await c.post("/api/groups", { name: `MG-B-${stamp2}`, description: "" })).data;
+      const dm = await c.post("/api/devices", body({ name: `multi-${stamp2}`, group_ids: [ga.id, gb.id] }));
+      check("a device can be in several groups, the first being its main group", dm.status === 201 && dm.data.groups?.length === 2 && dm.data.group_id === ga.id && dm.data.group_name === ga.name, JSON.stringify(dm.data?.groups));
+      const counts = (await c.get("/api/groups")).data;
+      check("each group counts the device", counts.find((g) => g.id === ga.id)?.device_count === 1 && counts.find((g) => g.id === gb.id)?.device_count === 1);
+      const kept = await c.put(`/api/devices/${dm.data.id}`, body({ name: `multi-${stamp2}`, description: "again" }));
+      check("saving without groups keeps them", kept.status === 200 && kept.data.groups.length === 2);
+      const legacy = await c.put(`/api/devices/${dm.data.id}`, body({ name: `multi-${stamp2}`, group_id: gb.id }));
+      check("the older single group_id still works and replaces the groups", legacy.status === 200 && legacy.data.groups.length === 1 && legacy.data.group_id === gb.id);
+      await c.put(`/api/devices/${dm.data.id}`, body({ name: `multi-${stamp2}`, group_ids: [ga.id, gb.id] }));
+      const badGroup = await c.put(`/api/devices/${dm.data.id}`, body({ name: `multi-${stamp2}`, group_ids: [ga.id, "00000000-0000-4000-8000-000000000000"] }));
+      check("an unknown group is rejected", badGroup.status === 422, `status ${badGroup.status}`);
+      // A member who was given only the second group sees the device through it.
+      const um = await mkUser(`mem-grp-${stamp2}`, { inventory_mode: "selected", group_ids: [gb.id], permissions: ["sessions.connect"] });
+      const Lm = await login(`mem-grp-${stamp2}`, pw(`mem-grp-${stamp2}`));
+      const seen = (await Lm.m.get("/api/devices")).data.map((d) => d.id);
+      check("a group granted to a member reaches the devices that are in it, whichever group is first", seen.includes(dm.data.id) && seen.length === 1, `${seen.length} devices`);
+      // Deleting the main group leaves the other one as the main group.
+      await c.del(`/api/groups/${ga.id}`);
+      const after = (await c.get(`/api/devices/${dm.data.id}`)).data;
+      check("deleting the main group leaves the device in its other group", after.groups.length === 1 && after.group_id === gb.id, JSON.stringify(after.groups));
+      await c.del(`/api/devices/${dm.data.id}`);
+      await c.del(`/api/groups/${gb.id}`);
+      await c.del(`/api/users/${um.data.id}?keep_inventory=false`);
+    }
+
+    // ---- VMware ESXi as an operating system of its own ----
+    {
+      const esxi = await c.post("/api/devices", body({ name: `esxi-${stamp2}`, os: "esxi" }));
+      check("VMware ESXi is a device kind", esxi.status === 201 && esxi.data.os === "esxi", `${esxi.status} ${esxi.data?.os}`);
+      await c.del(`/api/devices/${esxi.data.id}`);
+    }
+
+    // Cloning: the original (devId) has SSH, VNC and RDP methods; SSH has a saved password and a pinned host key.
+    const cloneBody = (name, extra) => body({ name, location: { label: "Frankfurt, Germany", latitude: 50.11, longitude: 8.68 }, ...extra, copy_connections: true, copy_secrets: true });
+    const cl = await c.post(`/api/devices/${devId}/clone`, cloneBody(`clone-${stamp2}`));
+    const clConns = cl.status === 201 ? (await c.get(`/api/devices/${cl.data.device.id}/connections`)).data : [];
+    const clSsh = clConns.find((x) => x.protocol === "ssh");
+    check("an administrator clones a device with its connection methods and saved sign-ins", cl.status === 201 && cl.data.connections_copied === 3 && cl.data.secrets_copied >= 1 && cl.data.secrets_not_copied === false && clSsh?.secret_fields?.includes("password"),
+      `${cl.status} copied=${cl.data?.connections_copied} secrets=${cl.data?.secrets_copied}`);
+    check("the clone keeps the location it was given and is a separate device", cl.data?.device?.id !== devId && cl.data?.device?.location?.label === "Frankfurt, Germany");
+    check("what identifies the original machine is not copied (pinned SSH host key, RDP certificate)", !!clSsh && !(clSsh.settings.host_key) && clConns.filter((x) => x.protocol === "rdp").every((x) => !x.settings.cert_fingerprints), JSON.stringify(clSsh?.settings?.host_key ?? ""));
+    // The copied password must really open on the clone (it was re-sealed for the new connection).
+    if (clSsh) {
+      const hk2 = await c.post(`/api/connections/${clSsh.id}/ssh-host-key`);
+      await c.put(`/api/connections/${clSsh.id}`, { name: "SSH", protocol: "ssh", port: clSsh.port, username: clSsh.username, domain: "", credential_id: null, settings: { ...clSsh.settings, host_key: hk2.data?.key ?? "" }, secret: { mode: "keep" } });
+      const acc2 = await c.post(`/api/connections/${clSsh.id}/ssh-access`, {});
+      check("the copied saved password works on the clone", acc2.status === 201, `status ${acc2.status} ${acc2.data?.error?.code ?? ""}`);
+      if (acc2.status === 201) await c.del(`/api/ssh-access/${acc2.data.id}`);
+    }
+    const auditClone = ((await c.get(`/api/audit?action=device.&limit=50`)).data.events ?? []).filter((e) => e.action === "device.clone");
+    check("cloning is recorded in the audit log without secrets", auditClone.length > 0 && !JSON.stringify(auditClone).includes(TARGET_PASSWORD), `${auditClone.length} events: ${JSON.stringify(auditClone[0] ?? {}).slice(0, 200)}`);
+
+    // A member who may manage inventory and can see the shared device must not receive its saved passwords.
+    const uc = await mkUser(`mem-clone-${stamp2}`, { inventory_mode: "all", permissions: ["inventory.manage", "sessions.connect"] });
+    const Lc = await login(`mem-clone-${stamp2}`, pw(`mem-clone-${stamp2}`));
+    const mc = await Lc.m.post(`/api/devices/${devId}/clone`, cloneBody(`member-clone-${stamp2}`, { address: "192.0.2.77" }));
+    const mcConns = mc.status === 201 ? (await Lc.m.get(`/api/devices/${mc.data.device.id}/connections`)).data : [];
+    check("a member cloning a shared device gets its methods but never its saved passwords", mc.status === 201 && mc.data.connections_copied >= 1 && mc.data.secrets_copied === 0 && mc.data.secrets_not_copied === true && mcConns.every((x) => (x.secret_fields ?? []).length === 0 && !x.credential_id) && mc.data.device.owner_id !== null,
+      `${mc.status} copied=${mc.data?.connections_copied} secrets=${mc.data?.secrets_copied} fields=${JSON.stringify(mcConns.map((x) => x.secret_fields))}`);
+    const noPerm = await L1b.m.post(`/api/devices/${devId}/clone`, cloneBody(`denied-${stamp2}`));
+    check("cloning needs the permission to manage inventory", noPerm.status === 403, `status ${noPerm.status}`);
+    const hidden = await Lc.m.post(`/api/devices/00000000-0000-4000-8000-000000000000/clone`, cloneBody(`nothing-${stamp2}`));
+    check("cloning something that does not exist is a 404", hidden.status === 404, `status ${hidden.status}`);
+    for (const id of [cl.data?.device?.id, mc.data?.device?.id]) if (id) await c.del(`/api/devices/${id}`);
+    await c.del(`/api/users/${uc.data.id}?keep_inventory=false`);
+  }
+
   // Disable
   await c.put(`/api/users/${u3.data.id}`, { role: "member", team_id: null, permissions: ["sessions.connect"], inventory_mode: "all", device_ids: [], group_ids: [], disabled: true });
   const dis = await login(`mem-all-${stamp2}`, pw(`mem-all-${stamp2}`));

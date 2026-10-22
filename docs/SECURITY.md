@@ -137,6 +137,13 @@ cosign verify ghcr.io/emremrangz/emremote:0.1.2 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
+## Cloning devices
+
+Cloning copies saved passwords and keys only when the original and the clone have the same owner (shared inventory for
+administrators, the member's own devices for members). Otherwise a member could clone a shared device, point the copy at a
+server of their own and receive the shared password there. Members also need the permission to manage inventory, and the
+original must be visible to them. Cloning is recorded in the audit log (`device.clone`, without secrets).
+
 ## Reporting vulnerabilities
 
 Please report security problems privately to the maintainers rather than opening a public issue.

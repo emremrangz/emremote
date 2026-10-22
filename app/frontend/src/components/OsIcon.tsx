@@ -59,7 +59,7 @@ function Brand({ path, className }: { path: string; className?: string }) {
 
 // A logo cropped to its drawn area, so wide marks (VMware) fill the space instead of
 // sitting small inside a square canvas.
-function FitBrand({ path }: { path: string }) {
+function FitBrand({ path, className }: { path: string; className?: string }) {
   const p = useRef<SVGPathElement>(null);
   const [box, setBox] = useState("0 0 24 24");
   useLayoutEffect(() => {
@@ -71,7 +71,7 @@ function FitBrand({ path }: { path: string }) {
     }
   }, [path]);
   return (
-    <svg viewBox={box} className="h-5 w-8" preserveAspectRatio="xMidYMid meet" fill="currentColor" aria-hidden="true">
+    <svg viewBox={box} className={className ?? "h-5 w-8"} preserveAspectRatio="xMidYMid meet" fill="currentColor" aria-hidden="true">
       <path ref={p} d={path} />
     </svg>
   );
@@ -160,6 +160,7 @@ const tint: Record<OS, string> = {
   macos: "text-fg",
   linux: "text-fg",
   network: "text-accent",
+  esxi: "text-[#7d8fa3]",
   other: "text-muted",
 };
 
@@ -174,6 +175,8 @@ export function OsIcon({ os, className, boxed, distro }: { os: OS; className?: s
     <Brand path={siApple.path} className={size} />
   ) : os === "linux" ? (
     <Brand path={siLinux.path} className={size} />
+  ) : os === "esxi" ? (
+    <FitBrand path={siVmware.path} className={boxed ? "h-5 w-7" : "h-4 w-6"} />
   ) : os === "network" ? (
     <Network className={size} />
   ) : (

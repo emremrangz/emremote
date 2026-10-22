@@ -209,6 +209,26 @@ gateway joins them read-only, and emremote drops any input they send as well).
 - Viewers see everything on the screen, including any secret typed into a visible field. Share
   only with people who may see what you are about to do.
 
+## Groups, ESXi and Proxmox
+
+- A device can be in **several groups**: in Add or Edit device, add groups one after the other (the first is the main group,
+  shown in the breadcrumb). Each group lists and counts the device; giving a person a group gives them every device in it.
+- **VMware ESXi:** choose "VMware ESXi" as the operating system. SSH, files and terminals work; the System tab is not shown
+  because ESXi does not provide the commands emremote uses to read a Linux host.
+- **Proxmox VE** hosts are recognised over SSH (the "-pve" kernel) and shown with the Proxmox logo and version.
+
+## Locations, the map and cloning
+
+- **Location** (optional, in Add or Edit device): search a city, click the small map or type latitude and longitude. The city
+  list and the map outlines ship with emremote, so no address or coordinate is ever sent to a map service.
+- The **Overview** page shows located devices on a world map. Devices within about the same region form one marker with a
+  number; click it to list them. Green means everything answers, red nothing does, amber is mixed.
+- **Clone device** (device page menu, or the row menu in the list) opens the Add form filled from the original: kind, group,
+  tags, notes and place stay, name and address are yours to enter. The connection methods are copied with their ports, users
+  and settings. Saved passwords and keys are copied only when the original belongs to you (administrators: the shared
+  inventory); uncheck the box to leave them out. A clone never inherits the original's pinned SSH host key or RDP
+  certificate, MAC address or hostname.
+
 ## Quick view
 
 **Connect** opens the session in the workspace window (tabs and split panes). For a quick look or a short

@@ -69,7 +69,7 @@ export function AccessEditor({
   const sharedGroups = useMemo(() => (groups.data ?? []).filter((g) => g.owner_id === null), [groups.data]);
   const visible = useMemo(() => {
     const n = q.trim().toLowerCase();
-    return shared.filter((d) => !n || [d.name, d.address, d.group_name ?? ""].some((x) => x.toLowerCase().includes(n)));
+    return shared.filter((d) => !n || [d.name, d.address, ...d.groups.map((g) => g.name)].some((x) => x.toLowerCase().includes(n)));
   }, [shared, q]);
 
   return (
@@ -132,7 +132,7 @@ export function AccessEditor({
                 )}
                 <p className="px-2 pb-1 pt-2.5 text-2xs font-semibold uppercase tracking-wide text-subtle">Devices</p>
                 {visible.map((d) => {
-                  const viaGroup = !!d.group_id && value.groupIds.includes(d.group_id);
+                  const viaGroup = d.groups.some((g) => value.groupIds.includes(g.id));
                   return (
                     <Check
                       key={d.id}
@@ -141,7 +141,7 @@ export function AccessEditor({
                       onChange={(on) => onChange({ ...value, deviceIds: toggle(value.deviceIds, d.id, on) })}
                       label={d.name}
                       hint={d.address}
-                      badge={viaGroup ? "via group" : (d.group_name ?? undefined)}
+                      badge={viaGroup ? "via group" : d.groups.map((g) => g.name).join(", ") || undefined}
                     />
                   );
                 })}

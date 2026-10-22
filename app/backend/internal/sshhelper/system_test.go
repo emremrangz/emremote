@@ -192,3 +192,10 @@ func TestClassifyVirtualization(t *testing.T) {
 		t.Errorf("no Proxmox note for other KVM hosts, got %q", v.Note)
 	}
 }
+
+func TestRePveManager(t *testing.T) {
+	m := rePveManager.FindStringSubmatch("pve-manager/9.0.3/b3b6245d7a8f1f0f (running kernel: 7.0.14-17-pve)")
+	if m == nil || m[1] != "9.0.3" {
+		t.Fatalf("%v", m)
+	}
+}

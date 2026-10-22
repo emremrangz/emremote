@@ -15,11 +15,12 @@ Open RDP, VNC, SSH and Telnet sessions in a browser tab, with no agent installed
 | ![Quick view](docs/images/quick-view.png)<br>**Quick view**: a session in a window over the page you are on | ![Workspace](docs/images/workspace.png)<br>**Workspace**: sessions as tabs, one to four panes |
 | ![Switch health](docs/images/switch-system.png)<br>**Switch health**: CPU, memory, firmware and uptime | ![Statistics](docs/images/statistics.png)<br>**Statistics**: usage by day and hour, fleet and security |
 | ![Activity log](docs/images/activity.png)<br>**Activity log**: every sign-in, session and file transfer | ![Terminal themes](docs/images/terminal-themes.png)<br>**Terminal themes** with a live preview |
+| ![Map](docs/images/map.png)<br>**Map**: where your servers are, nearby ones grouped | ![Clone a device](docs/images/clone-device.png)<br>**Clone a device**: same kind, methods and sign-ins, a new name and address |
 
 ## Features
 
 - **RDP, VNC, SSH and Telnet in the browser**, with tabs, split panes and a screenshot button.
-- **Device inventory** with groups, tags, search, and import/export.
+- **Device inventory** with groups, tags, search, locations on a world map, cloning, and import/export.
 - **Files**: SFTP file manager, RDP transfer drive, and copy between servers.
 - **Details without an agent**: OS, hardware, VM or physical, over SSH.
 - **Users and teams**, two-factor sign-in, an audit log and an encrypted password vault.

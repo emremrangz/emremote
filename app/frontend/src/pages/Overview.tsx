@@ -11,6 +11,8 @@ import { Donut, DayBars, Ring, Sparkline } from "@/components/Charts";
 import { DeviceStatus } from "@/components/Status";
 import { ProtocolBadge } from "@/components/Status";
 import { DeviceRow, Panel } from "@/components/DashboardParts";
+import { WorldMap, type MapTone } from "@/components/WorldMap";
+import { deviceReachability } from "@/components/Status";
 import { ActivityItem } from "@/components/ActivityItem";
 import { DeviceFormDialog } from "@/components/DeviceForm";
 import { QuickConnectDialog } from "@/components/QuickConnect";
@@ -245,6 +247,8 @@ export default function OverviewPage() {
             </div>
           </Panel>
 
+          <LocationsPanel />
+
           <Panel title="Recently accessed" action={<Link to="/devices" className="text-xs font-medium text-accent hover:underline">All devices</Link>}>
             {s.recently_accessed.length ? (
               <ul className="divide-y divide-border">
@@ -391,5 +395,39 @@ export default function OverviewPage() {
       <DeviceFormDialog open={adding} onOpenChange={setAdding} onSaved={(d) => navigate(`/devices/${d.id}`)} />
       <QuickConnectDialog open={quick} onOpenChange={setQuick} />
     </>
+  );
+}
+
+const TONE: Record<string, MapTone> = { reachable: "ok", partial: "warn", unreachable: "bad", unknown: "idle", none: "idle" };
+
+/** Where the servers are: a small world map, nearby devices grouped into one marker. */
+function LocationsPanel() {
+  const devices = useDevices();
+  const list = devices.data ?? [];
+  const located = list
+    .filter((d) => d.location)
+    .map((d) => ({ id: d.id, name: d.name, address: d.address, tone: TONE[deviceReachability(d)] ?? "idle", place: d.location!.label, lat: d.location!.latitude, lon: d.location!.longitude }));
+  if (!list.length) return null;
+  const missing = list.length - located.length;
+  return (
+    <Panel
+      title="Locations"
+      action={
+        <span className="text-xs text-subtle">
+          {located.length} of {list.length} on the map
+        </span>
+      }
+    >
+      <div className="py-3">
+        {located.length ? (
+          <WorldMap devices={located} />
+        ) : (
+          <p className="flex h-28 items-center justify-center text-center text-sm text-subtle">
+            No device has a location yet. Edit a device and choose where it is to see it here.
+          </p>
+        )}
+        {located.length > 0 && missing > 0 && <p className="mt-2 text-xs text-subtle">{missing} device{missing === 1 ? " has" : "s have"} no location yet: edit it and choose a place.</p>}
+      </div>
+    </Panel>
   );
 }

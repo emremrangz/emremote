@@ -1,6 +1,9 @@
 import { sessionProfile, PROFILE_KEYS } from "./sessionProfile";
 import { textToKeysyms } from "./clipboard";
 import { describe, expect, it } from "vitest";
+import { clusterPoints, project, unproject } from "./worldMap";
+import { searchCities } from "./cities";
+import { distroOf } from "../components/OsIcon";
 import { duration, relativeTime } from "./format";
 import { statusMessage } from "./guac";
 import { deviceReachability } from "../components/Status";
@@ -87,5 +90,59 @@ describe("key files", () => {
     expect(keyFileProblem("hello")).toMatch(/does not look like a private key/);
     expect(keyFileProblem("")).toMatch(/empty/);
     expect(keyFileProblem("A".repeat(40000))).toMatch(/too large/);
+  });
+});
+
+
+describe("world map", () => {
+  it("projects and back", () => {
+    const [x, y] = project(41.01, 28.98);
+    expect(x).toBeCloseTo(208.98);
+    expect(y).toBeCloseTo(42.99);
+    const [lat, lon] = unproject(x, y);
+    expect(lat).toBeCloseTo(41.01);
+    expect(lon).toBeCloseTo(28.98);
+  });
+
+  it("groups nearby servers and keeps far ones apart", () => {
+    const pts = [
+      { lat: 50.11, lon: 8.68, item: "frankfurt" },
+      { lat: 52.37, lon: 4.9, item: "amsterdam" },
+      { lat: 48.86, lon: 2.35, item: "paris" },
+      { lat: 19.08, lon: 72.88, item: "mumbai" },
+      { lat: 40.71, lon: -74.01, item: "new-york" },
+    ];
+    const c = clusterPoints(pts);
+    expect(c.length).toBe(3);
+    const europe = c.find((x) => x.items.includes("frankfurt"))!;
+    expect(europe.items.sort()).toEqual(["amsterdam", "frankfurt", "paris"]);
+    expect(c.find((x) => x.items.includes("mumbai"))!.items).toEqual(["mumbai"]);
+  });
+
+  it("gives the same clusters whatever the input order", () => {
+    const pts = [
+      { lat: 50, lon: 8, item: "a" },
+      { lat: 52, lon: 5, item: "b" },
+      { lat: -33, lon: 151, item: "c" },
+    ];
+    const one = clusterPoints(pts).map((c) => c.items.sort());
+    const two = clusterPoints([...pts].reverse()).map((c) => c.items.sort());
+    expect(two.sort()).toEqual(one.sort());
+  });
+
+  it("finds cities without caring about accents or case", () => {
+    expect(searchCities("istan")[0][0]).toBe("Istanbul");
+    expect(searchCities("IZMIR")[0][0]).toBe("Izmir");
+    expect(searchCities("mumbai")[0][1]).toBe("India");
+    expect(searchCities("zzzzz")).toEqual([]);
+    expect(searchCities("")).toEqual([]);
+  });
+});
+
+describe("operating system logos", () => {
+  it("shows Proxmox, not Debian, for a Proxmox host", () => {
+    expect(distroOf("Proxmox VE 9.0.3 (Debian GNU/Linux 13 (trixie))")?.name).toBe("Proxmox");
+    expect(distroOf("Debian GNU/Linux 13 (trixie)")?.name).toBe("Debian");
+    expect(distroOf("Ubuntu 24.04.5 LTS")?.name).toBe("Ubuntu");
   });
 });

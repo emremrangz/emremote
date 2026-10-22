@@ -24,7 +24,8 @@ type Group struct {
 // ListGroups returns the groups a user can see; counts include only visible devices.
 func (s *Store) ListGroups(ctx context.Context, uid string) ([]Group, error) {
 	rows, err := s.pool.Query(ctx, `SELECT g.id, g.owner_id, g.name, g.description, count(d.id), g.created_at, g.updated_at
-		FROM device_groups g LEFT JOIN devices d ON d.group_id = g.id AND d.id IN (SELECT emr_visible_devices($1))
+		FROM device_groups g LEFT JOIN device_group_members m ON m.group_id = g.id
+		LEFT JOIN devices d ON d.id = m.device_id AND d.id IN (SELECT emr_visible_devices($1))
 		WHERE g.id IN (SELECT emr_visible_groups($1))
 		GROUP BY g.id ORDER BY lower(g.name)`, uid)
 	if err != nil {
@@ -40,7 +41,7 @@ func (s *Store) ListGroups(ctx context.Context, uid string) ([]Group, error) {
 func (s *Store) GetGroup(ctx context.Context, id string) (*Group, error) {
 	var g Group
 	err := s.pool.QueryRow(ctx, `SELECT g.id, g.owner_id, g.name, g.description,
-		(SELECT count(*) FROM devices d WHERE d.group_id = g.id), g.created_at, g.updated_at
+		(SELECT count(*) FROM device_group_members m WHERE m.group_id = g.id), g.created_at, g.updated_at
 		FROM device_groups g WHERE g.id = $1`, id).Scan(&g.ID, &g.OwnerID, &g.Name, &g.Description, &g.DeviceCount, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		return nil, mapErr(err)
@@ -70,19 +71,21 @@ func (s *Store) DeleteGroup(ctx context.Context, id string) error {
 // ---- Devices ----
 
 type Device struct {
-	ID             string              `json:"id"`
-	OwnerID        *string             `json:"owner_id"`
-	CanManage      bool                `json:"can_manage"`
-	Name           string              `json:"name"`
-	Hostname       string              `json:"hostname"`
-	Address        string              `json:"address"`
-	OS             string              `json:"os"`
-	DeviceType     string              `json:"device_type"`
-	Description    string              `json:"description"`
-	Notes          string              `json:"notes"`
-	Tags           []string            `json:"tags"`
+	ID          string   `json:"id"`
+	OwnerID     *string  `json:"owner_id"`
+	CanManage   bool     `json:"can_manage"`
+	Name        string   `json:"name"`
+	Hostname    string   `json:"hostname"`
+	Address     string   `json:"address"`
+	OS          string   `json:"os"`
+	DeviceType  string   `json:"device_type"`
+	Description string   `json:"description"`
+	Notes       string   `json:"notes"`
+	Tags        []string `json:"tags"`
+	// GroupID and GroupName are the first group; Groups lists all of them, in order.
 	GroupID        *string             `json:"group_id"`
 	GroupName      *string             `json:"group_name"`
+	Groups         []GroupRef          `json:"groups"`
 	Favorite       bool                `json:"favorite"`
 	CreatedAt      time.Time           `json:"created_at"`
 	UpdatedAt      time.Time           `json:"updated_at"`
@@ -93,6 +96,21 @@ type Device struct {
 	// MAC and WOLBroadcast support Wake-on-LAN.
 	MAC          string `json:"mac"`
 	WOLBroadcast string `json:"wol_broadcast"`
+	// Location is where the device is (for the map); nil when not set.
+	Location *Location `json:"location"`
+}
+
+// GroupRef names a group a device belongs to.
+type GroupRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Location is a place on the map with an optional name ("Istanbul, Turkey").
+type Location struct {
+	Label     string  `json:"label"`
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }
 
 // DeviceInput holds the user-editable device fields.
@@ -105,30 +123,50 @@ type DeviceInput struct {
 	Description string
 	Notes       string
 	Tags        []string
-	GroupID     *string
-	Favorite    bool
+	// GroupIDs are the groups the device belongs to; the first one is its main group.
+	GroupIDs []string
+	// SetGroups says whether GroupIDs is to be stored on an update (a request that does not mention groups keeps them).
+	SetGroups bool
+	Favorite  bool
 	// MAC and WOLBroadcast: nil keeps the stored value.
 	MAC          *string
 	WOLBroadcast *string
+	// SetLocation says whether Location is to be stored (nil Location then clears it); false keeps what is stored.
+	SetLocation bool
+	Location    *Location
 }
 
 // Devices are always read for a viewer (the user whose favorites and "last
 // opened" times are shown); that user id is parameter $1 of every query.
 const deviceCols = `d.id, d.owner_id, d.name, d.hostname, d.address, d.os, d.device_type, d.description, d.notes, d.tags,
-	d.group_id, g.name, COALESCE(st.favorite, false), d.created_at, d.updated_at, st.last_accessed_at, d.facts, d.mac, d.wol_broadcast`
+	pg.group_id, pg.name, COALESCE(st.favorite, false), d.created_at, d.updated_at, st.last_accessed_at, d.facts, d.mac, d.wol_broadcast,
+	d.latitude, d.longitude, d.location,
+	COALESCE((SELECT jsonb_agg(jsonb_build_object('id', m.group_id, 'name', g3.name) ORDER BY m.position, lower(g3.name))
+		FROM device_group_members m JOIN device_groups g3 ON g3.id = m.group_id WHERE m.device_id = d.id), '[]'::jsonb)`
 
-const deviceFrom = ` FROM devices d LEFT JOIN device_groups g ON g.id = d.group_id
+const deviceFrom = ` FROM devices d LEFT JOIN LATERAL (
+		SELECT m.group_id, g2.name FROM device_group_members m JOIN device_groups g2 ON g2.id = m.group_id
+		WHERE m.device_id = d.id ORDER BY m.position, lower(g2.name) LIMIT 1) pg ON true
 	LEFT JOIN device_user_state st ON st.device_id = d.id AND st.user_id = $1 `
 
 func scanDevice(row pgx.Row) (*Device, error) {
 	var d Device
+	var lat, lon *float64
+	var label string
+	var groupsJSON []byte
 	err := row.Scan(&d.ID, &d.OwnerID, &d.Name, &d.Hostname, &d.Address, &d.OS, &d.DeviceType, &d.Description, &d.Notes, &d.Tags,
-		&d.GroupID, &d.GroupName, &d.Favorite, &d.CreatedAt, &d.UpdatedAt, &d.LastAccessedAt, &d.Facts, &d.MAC, &d.WOLBroadcast)
+		&d.GroupID, &d.GroupName, &d.Favorite, &d.CreatedAt, &d.UpdatedAt, &d.LastAccessedAt, &d.Facts, &d.MAC, &d.WOLBroadcast, &lat, &lon, &label, &groupsJSON)
 	if err != nil {
 		return nil, mapErr(err)
 	}
+	if lat != nil && lon != nil {
+		d.Location = &Location{Label: label, Latitude: *lat, Longitude: *lon}
+	}
 	if d.Tags == nil {
 		d.Tags = []string{}
+	}
+	if err := json.Unmarshal(groupsJSON, &d.Groups); err != nil || d.Groups == nil {
+		d.Groups = []GroupRef{}
 	}
 	d.Connections = []ConnectionSummary{}
 	return &d, nil
@@ -198,11 +236,16 @@ func (s *Store) GroupOwner(ctx context.Context, id string) (*string, error) {
 // CreateDevice adds a device owned by owner (nil = shared); uid's favorite flag is set from in.Favorite.
 func (s *Store) CreateDevice(ctx context.Context, uid string, owner *string, in DeviceInput) (*Device, error) {
 	var id string
-	err := s.pool.QueryRow(ctx, `INSERT INTO devices (owner_id, name, hostname, address, os, device_type, description, notes, tags, group_id, mac, wol_broadcast)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, ''), COALESCE($12, '')) RETURNING id`,
-		owner, in.Name, in.Hostname, in.Address, in.OS, in.DeviceType, in.Description, in.Notes, in.Tags, in.GroupID, in.MAC, in.WOLBroadcast).Scan(&id)
+	lat, lon, label := locationColumns(in.Location)
+	err := s.pool.QueryRow(ctx, `INSERT INTO devices (owner_id, name, hostname, address, os, device_type, description, notes, tags, mac, wol_broadcast, latitude, longitude, location)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, ''), COALESCE($11, ''), $12, $13, $14) RETURNING id`,
+		owner, in.Name, in.Hostname, in.Address, in.OS, in.DeviceType, in.Description, in.Notes, in.Tags, in.MAC, in.WOLBroadcast, lat, lon, label).Scan(&id)
 	if err != nil {
 		return nil, mapErr(err)
+	}
+	if err := s.setDeviceGroups(ctx, id, in.GroupIDs); err != nil {
+		_ = s.DeleteDevice(ctx, id)
+		return nil, err
 	}
 	if in.Favorite {
 		if err := s.SetFavorite(ctx, uid, id, true); err != nil {
@@ -214,11 +257,18 @@ func (s *Store) CreateDevice(ctx context.Context, uid string, owner *string, in 
 
 func (s *Store) UpdateDevice(ctx context.Context, uid, id string, in DeviceInput) (*Device, error) {
 	err := execOne(ctx, s.pool, `UPDATE devices SET name = $2, hostname = $3, address = $4, os = $5, device_type = $6,
-		description = $7, notes = $8, tags = $9, group_id = $10, mac = COALESCE($11, mac), wol_broadcast = COALESCE($12, wol_broadcast),
-		updated_at = now() WHERE id = $1`,
-		id, in.Name, in.Hostname, in.Address, in.OS, in.DeviceType, in.Description, in.Notes, in.Tags, in.GroupID, in.MAC, in.WOLBroadcast)
+		description = $7, notes = $8, tags = $9, mac = COALESCE($10, mac), wol_broadcast = COALESCE($11, wol_broadcast),
+		latitude = CASE WHEN $12 THEN $13::float8 ELSE latitude END, longitude = CASE WHEN $12 THEN $14::float8 ELSE longitude END,
+		location = CASE WHEN $12 THEN $15 ELSE location END, updated_at = now() WHERE id = $1`,
+		id, in.Name, in.Hostname, in.Address, in.OS, in.DeviceType, in.Description, in.Notes, in.Tags, in.MAC, in.WOLBroadcast,
+		in.SetLocation, locLat(in.Location), locLon(in.Location), locLabel(in.Location))
 	if err != nil {
 		return nil, err
+	}
+	if in.SetGroups {
+		if err := s.setDeviceGroups(ctx, id, in.GroupIDs); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.SetFavorite(ctx, uid, id, in.Favorite); err != nil {
 		return nil, err
@@ -422,4 +472,56 @@ func (s *Store) SetDeviceFacts(ctx context.Context, id string, facts json.RawMes
 		hostname = CASE WHEN hostname = '' THEN $4 ELSE hostname END,
 		mac = CASE WHEN mac = '' THEN $5 ELSE mac END WHERE id = $1`, id, facts, os, hostname, mac)
 	return err
+}
+
+func locationColumns(l *Location) (lat, lon *float64, label string) {
+	return locLat(l), locLon(l), locLabel(l)
+}
+
+func locLat(l *Location) *float64 {
+	if l == nil {
+		return nil
+	}
+	return &l.Latitude
+}
+
+func locLon(l *Location) *float64 {
+	if l == nil {
+		return nil
+	}
+	return &l.Longitude
+}
+
+func locLabel(l *Location) string {
+	if l == nil {
+		return ""
+	}
+	return l.Label
+}
+
+// setDeviceGroups makes ids the groups of a device, in that order (the first is its main group). A group that does not
+// exist is ErrNotFound. devices.group_id is kept equal to the first one for older readers.
+func (s *Store) setDeviceGroups(ctx context.Context, deviceID string, ids []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `DELETE FROM device_group_members WHERE device_id = $1`, deviceID); err != nil {
+		return err
+	}
+	var first *string
+	for i, g := range ids {
+		if _, err := tx.Exec(ctx, `INSERT INTO device_group_members (device_id, group_id, position) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, deviceID, g, i); err != nil {
+			return mapErr(err)
+		}
+		if first == nil {
+			g := g
+			first = &g
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE devices SET group_id = $2 WHERE id = $1`, deviceID, first); err != nil {
+		return mapErr(err)
+	}
+	return tx.Commit(ctx)
 }

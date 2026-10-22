@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -62,9 +63,18 @@ func (s *Server) handleExport(w http.ResponseWriter, r *http.Request) {
 		if id.Connections == nil {
 			id.Connections = []importConn{}
 		}
+		if d.Location != nil {
+			lat, lon := d.Location.Latitude, d.Location.Longitude
+			id.Location = &locationRequest{Label: d.Location.Label, Latitude: &lat, Longitude: &lon}
+		}
 		if d.GroupName != nil {
 			id.Group = *d.GroupName
-			used[*d.GroupName] = true
+		}
+		for _, g := range d.Groups {
+			used[g.Name] = true
+			if len(d.Groups) > 1 {
+				id.Groups = append(id.Groups, g.Name)
+			}
 		}
 		doc.Devices = append(doc.Devices, id)
 	}
@@ -154,6 +164,7 @@ type importPreview struct {
 type planned struct {
 	device store.DeviceInput
 	group  string
+	groups []string
 	conns  []store.ConnectionInput
 }
 
@@ -174,13 +185,16 @@ func (s *Server) plan(ctx context.Context, u *store.User, p *parsed) ([]planned,
 	items := make([]importItem, len(p.Devices))
 	for i, d := range p.Devices {
 		req := deviceRequest{Name: d.Name, Hostname: d.Hostname, Address: d.Address, OS: d.OS, DeviceType: d.DeviceType,
-			Description: d.Description, Notes: d.Notes, Tags: d.Tags, Favorite: d.Favorite}
+			Description: d.Description, Notes: d.Notes, Tags: d.Tags, Favorite: d.Favorite, Location: d.Location}
 		v, in := req.validate()
 		item := importItem{Name: strings.TrimSpace(d.Name), Address: strings.TrimSpace(d.Address), Group: strings.TrimSpace(d.Group), Problems: []string{}, Connections: []string{}}
 		for f, m := range v.errs {
 			item.Problems = append(item.Problems, f+": "+m)
 		}
-		if g := strings.TrimSpace(d.Group); g != "" {
+		for _, g := range append([]string{d.Group}, d.Groups...) {
+			if g = strings.TrimSpace(g); g == "" {
+				continue
+			}
 			gv := newValidator()
 			gv.text("group", g, true, 64, false)
 			if !gv.ok() {
@@ -206,7 +220,7 @@ func (s *Server) plan(ctx context.Context, u *store.User, p *parsed) ([]planned,
 		sort.Strings(item.Problems)
 		item.Conflict = have[strings.ToLower(item.Name)+"\x00"+strings.ToLower(item.Address)]
 		items[i] = item
-		plans[i] = planned{device: in, group: item.Group, conns: cins}
+		plans[i] = planned{device: in, group: item.Group, groups: d.Groups, conns: cins}
 		if len(item.Problems) > 0 {
 			plans[i] = planned{}
 		}
@@ -351,7 +365,12 @@ func (s *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 			res.Renamed++
 		}
 		taken[strings.ToLower(in.Name)] = true
-		in.GroupID = groupFor(pl.group)
+		for _, name := range append([]string{pl.group}, pl.groups...) {
+			if id := groupFor(strings.TrimSpace(name)); id != nil && !slices.Contains(in.GroupIDs, *id) {
+				in.GroupIDs = append(in.GroupIDs, *id)
+			}
+		}
+		in.SetGroups = true
 		d, err := s.store.CreateDevice(r.Context(), u.ID, owner, in)
 		if err != nil {
 			res.Errors = append(res.Errors, in.Name+": "+errorText(err))

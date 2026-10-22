@@ -101,7 +101,7 @@ export function CommandPalette({
     const sorted = [...(devices.data ?? [])];
     if (!n) sorted.sort((a, b) => (b.last_accessed_at ?? "").localeCompare(a.last_accessed_at ?? ""));
     for (const d of sorted) {
-      const hay = [d.name, d.address, d.hostname, d.group_name ?? "", d.facts?.os ?? "", ...d.tags].join(" ").toLowerCase();
+      const hay = [d.name, d.address, d.hostname, ...d.groups.map((g) => g.name), d.facts?.os ?? "", ...d.tags].join(" ").toLowerCase();
       if (n && !hay.includes(n)) continue;
       if (can("sessions.connect")) for (const c of d.connections) devs.push({ kind: "connection", device: d, connection: c });
       devs.push({ kind: "device", device: d });

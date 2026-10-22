@@ -256,6 +256,7 @@ func (s *Server) Handler() http.Handler {
 
 	a("GET /api/devices", s.handleListDevices)
 	a("POST /api/devices", s.withPerm(inv, s.handleCreateDevice))
+	a("POST /api/devices/{id}/clone", s.dev(needUse, inv, s.handleCloneDevice))
 	a("GET /api/devices/{id}", s.dev(needUse, "", s.handleGetDevice))
 	a("PUT /api/devices/{id}", s.dev(needManage, "", s.handleUpdateDevice))
 	a("DELETE /api/devices/{id}", s.dev(needManage, "", s.handleDeleteDevice))

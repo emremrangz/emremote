@@ -108,7 +108,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: 
   const onDevices = loc.pathname === "/devices";
   const groupParam = onDevices ? params.get("group") : null;
   const all = devices.data ?? [];
-  const ungrouped = all.filter((d) => !d.group_id).length;
+  const ungrouped = all.filter((d) => d.groups.length === 0).length;
 
   return (
     <>

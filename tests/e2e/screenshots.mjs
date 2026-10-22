@@ -34,8 +34,10 @@ const grp = {};
 for (const g of await api("GET", "/api/groups")) grp[g.name] = g.id;
 console.log("default groups:", Object.keys(grp).join(", "));
 const conns = {};
-const add = async (name, address, os, type, group, tags, list) => {
-  const d = await api("POST", "/api/devices", { name, hostname: "", address, os, device_type: type, description: "", notes: "", tags, group_id: grp[group], favorite: tags.includes("prod") });
+const PLACES = { Frankfurt: ["Frankfurt, Germany", 50.11, 8.68], Amsterdam: ["Amsterdam, Netherlands", 52.37, 4.9], Istanbul: ["Istanbul, Turkey", 41.01, 28.98], Ashburn: ["Ashburn, United States", 39.04, -77.49], Mumbai: ["Mumbai, India", 19.08, 72.88], Singapore: ["Singapore, Singapore", 1.35, 103.82], Ankara: ["Ankara, Turkey", 39.93, 32.86], Sydney: ["Sydney, Australia", -33.87, 151.21] };
+const add = async (name, address, os, type, group, tags, list, place) => {
+  const pl = place && PLACES[place];
+  const d = await api("POST", "/api/devices", { name, hostname: "", address, os, device_type: type, description: "", notes: "", tags, group_id: grp[group], favorite: tags.includes("prod"), ...(pl ? { location: { label: pl[0], latitude: pl[1], longitude: pl[2] } } : {}) });
   conns[name] = {};
   for (const [protocol, port, user] of list) {
     const c = await api("POST", `/api/devices/${d.id}/connections`, { name: protocol.toUpperCase(), protocol, port, username: user, domain: "", credential_id: null, settings: {}, secret: { mode: "set", password: TPW } });
@@ -48,14 +50,14 @@ const add = async (name, address, os, type, group, tags, list) => {
   return d.id;
 };
 const ids = {};
-ids.web = await add("web-01", HOST, "linux", "server", "Servers", ["web", "prod"], [["ssh", 12222, "tester"]]);
-await add("db-01", HOST, "linux", "server", "Servers", ["database", "prod"], [["ssh", 12222, "tester"]]);
-await add("build-02", HOST, "linux", "virtual_machine", "Servers", ["ci"], [["ssh", 12222, "tester"]]);
-await add("win-dc01", HOST, "windows", "server", "Servers", ["domain"], [["rdp", 13389, "tester"]]);
-await add("frontdesk-pc", HOST, "windows", "desktop", "Workstations", [], [["rdp", 13389, "tester"]]);
-await add("mac-studio", HOST, "macos", "desktop", "Workstations", ["design"], [["vnc", 15900, ""]]);
-ids.sw = await add("core-sw1", HOST, "network", "network", "Network", ["core"], [["ssh", 12522, "tester"]]);
-await add("edge-sw2", HOST, "network", "network", "Network", ["edge"], [["telnet", 12323, "tester"]]);
+ids.web = await add("web-01", HOST, "linux", "server", "Servers", ["web", "prod"], [["ssh", 12222, "tester"]], "Frankfurt");
+await add("db-01", HOST, "linux", "server", "Servers", ["database", "prod"], [["ssh", 12222, "tester"]], "Frankfurt");
+await add("build-02", HOST, "linux", "virtual_machine", "Servers", ["ci"], [["ssh", 12222, "tester"]], "Amsterdam");
+await add("win-dc01", HOST, "windows", "server", "Servers", ["domain"], [["rdp", 13389, "tester"]], "Istanbul");
+await add("frontdesk-pc", HOST, "windows", "desktop", "Workstations", [], [["rdp", 13389, "tester"]], "Ankara");
+await add("mac-studio", HOST, "macos", "desktop", "Workstations", ["design"], [["vnc", 15900, ""]], "Ashburn");
+ids.sw = await add("core-sw1", HOST, "network", "network", "Network", ["core"], [["ssh", 12522, "tester"]], "Mumbai");
+await add("edge-sw2", HOST, "network", "network", "Network", ["edge"], [["telnet", 12323, "tester"]], "Singapore");
 
 // ---- some real usage so Statistics and Activity have something to show ----
 const sessions = [["web-01", "ssh", 5], ["win-dc01", "rdp", 7], ["mac-studio", "vnc", 5], ["web-01", "ssh", 4], ["db-01", "ssh", 4], ["frontdesk-pc", "rdp", 6], ["edge-sw2", "telnet", 4]];
@@ -76,6 +78,14 @@ await page.goto(`${BASE}/devices/${ids.web}?tab=system`); await page.waitForTime
 await shot("system");
 await page.goto(`${BASE}/`); await page.waitForTimeout(3000);
 await shot("overview");
+{
+  // The map on its own, with the list of one group of servers open.
+  const panel = page.locator("section", { hasText: "Locations" }).first();
+  await panel.scrollIntoViewIfNeeded();
+  await page.locator("svg g[role=button]").filter({ hasText: /^[2-9]$/ }).first().click();
+  await page.waitForTimeout(500);
+  await panel.screenshot({ path: `${OUT}/map.png` });
+}
 await page.goto(`${BASE}/devices`); await page.waitForTimeout(2500);
 await shot("devices");
 await page.goto(`${BASE}/statistics`); await page.waitForTimeout(3000);
@@ -111,6 +121,25 @@ await page.keyboard.press("Escape");
   await page.waitForTimeout(1500);
   await shot("quick-view");
   await qv.getByRole("button", { name: "Close quick view" }).click();
+}
+
+// ---- choosing a location, and cloning a device ----
+{
+  await page.goto(`${BASE}/devices/${ids.sw}`);
+  await page.getByRole("button", { name: "Edit device" }).click();
+  const dlg = page.getByRole("dialog", { name: "Edit device" });
+  await dlg.getByRole("button", { name: "Choose on the map" }).click();
+  await page.waitForTimeout(600);
+  await dlg.getByText("Location").first().scrollIntoViewIfNeeded();
+  await shot("location-picker");
+  await page.keyboard.press("Escape");
+  await page.goto(`${BASE}/devices/${ids.web}`);
+  await page.getByRole("button", { name: "More actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Clone device" }).click();
+  await page.getByRole("dialog", { name: "Clone device" }).waitFor();
+  await page.waitForTimeout(600);
+  await shot("clone-device");
+  await page.keyboard.press("Escape");
 }
 
 // ---- workspace: two shells side by side ----

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"net/netip"
 	"reflect"
@@ -116,11 +117,21 @@ type deviceRequest struct {
 	Description string   `json:"description"`
 	Notes       string   `json:"notes"`
 	Tags        []string `json:"tags"`
-	GroupID     *string  `json:"group_id"`
-	Favorite    bool     `json:"favorite"`
+	// GroupID is the older single-group form; GroupIDs lists every group, the first one being the main group.
+	GroupID  *string  `json:"group_id"`
+	GroupIDs []string `json:"group_ids"`
+	Favorite bool     `json:"favorite"`
 	// MAC and WOLBroadcast are optional; leaving them out keeps what is stored, "" clears.
 	MAC          *string `json:"mac"`
 	WOLBroadcast *string `json:"wol_broadcast"`
+	// Location is where the device is. Leaving it out keeps what is stored; sending latitude and longitude as null clears it.
+	Location *locationRequest `json:"location"`
+}
+
+type locationRequest struct {
+	Label     string   `json:"label"`
+	Latitude  *float64 `json:"latitude"`
+	Longitude *float64 `json:"longitude"`
 }
 
 func (req deviceRequest) validate() (*validator, store.DeviceInput) {
@@ -129,13 +140,32 @@ func (req deviceRequest) validate() (*validator, store.DeviceInput) {
 		Name:        v.text("name", req.Name, true, 128, false),
 		Hostname:    v.address("hostname", req.Hostname, false),
 		Address:     v.address("address", req.Address, true),
-		OS:          v.oneOf("os", req.OS, "windows", "macos", "linux", "network", "other"),
+		OS:          v.oneOf("os", req.OS, "windows", "macos", "linux", "network", "esxi", "other"),
 		DeviceType:  v.oneOf("device_type", req.DeviceType, "desktop", "laptop", "server", "virtual_machine", "network", "other"),
 		Description: v.text("description", req.Description, false, 500, false),
 		Notes:       v.text("notes", req.Notes, false, 10000, true),
 		Tags:        v.tags("tags", req.Tags),
-		GroupID:     v.optionalUUID("group_id", req.GroupID),
 		Favorite:    req.Favorite,
+	}
+	switch {
+	case req.GroupIDs != nil:
+		in.SetGroups = true
+		if len(req.GroupIDs) > 12 {
+			v.fail("group_ids", "A device can be in at most 12 groups")
+		}
+		seen := map[string]bool{}
+		for _, g := range req.GroupIDs {
+			g := g
+			if id := v.optionalUUID("group_ids", &g); id != nil && !seen[*id] {
+				seen[*id] = true
+				in.GroupIDs = append(in.GroupIDs, *id)
+			}
+		}
+	case req.GroupID != nil:
+		in.SetGroups = true
+		if id := v.optionalUUID("group_id", req.GroupID); id != nil {
+			in.GroupIDs = []string{*id}
+		}
 	}
 	if req.MAC != nil {
 		m := strings.TrimSpace(*req.MAC)
@@ -156,6 +186,23 @@ func (req deviceRequest) validate() (*validator, store.DeviceInput) {
 			}
 		}
 		in.WOLBroadcast = &bc
+	}
+	if req.Location != nil {
+		in.SetLocation = true
+		l := req.Location
+		label := v.text("location.label", l.Label, false, 100, false)
+		switch {
+		case l.Latitude == nil && l.Longitude == nil:
+			// clears the location
+		case l.Latitude == nil || l.Longitude == nil:
+			v.fail("location", "Give both latitude and longitude")
+		case *l.Latitude < -90 || *l.Latitude > 90 || math.IsNaN(*l.Latitude):
+			v.fail("location.latitude", "Latitude must be between -90 and 90")
+		case *l.Longitude < -180 || *l.Longitude > 180 || math.IsNaN(*l.Longitude):
+			v.fail("location.longitude", "Longitude must be between -180 and 180")
+		default:
+			in.Location = &store.Location{Label: label, Latitude: *l.Latitude, Longitude: *l.Longitude}
+		}
 	}
 	return v, in
 }
@@ -194,15 +241,15 @@ func (s *Server) handleCreateDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := userFrom(r.Context())
-	if in.GroupID != nil && !s.groupUsable(r.Context(), *in.GroupID, u.OwnerScope()) {
-		v.fail("group_id", "Group does not exist")
+	if !s.groupsUsable(r.Context(), in.GroupIDs, u.OwnerScope()) {
+		v.fail("group_ids", "A group does not exist")
 		writeValidation(w, v)
 		return
 	}
 	d, err := s.store.CreateDevice(r.Context(), u.ID, u.OwnerScope(), in)
 	if err != nil {
 		if err == store.ErrNotFound {
-			v.fail("group_id", "Group does not exist")
+			v.fail("group_ids", "A group does not exist")
 			writeValidation(w, v)
 			return
 		}
@@ -230,8 +277,8 @@ func (s *Server) handleUpdateDevice(w http.ResponseWriter, r *http.Request) {
 		writeValidation(w, v)
 		return
 	}
-	if in.GroupID != nil && !s.groupUsable(r.Context(), *in.GroupID, before.OwnerID) {
-		v.fail("group_id", "Group does not exist")
+	if in.SetGroups && !s.groupsUsable(r.Context(), in.GroupIDs, before.OwnerID) {
+		v.fail("group_ids", "A group does not exist")
 		writeValidation(w, v)
 		return
 	}
@@ -285,7 +332,7 @@ func changedDeviceFields(a, b *store.Device) []string {
 	cmp("description", a.Description, b.Description)
 	cmp("notes", a.Notes, b.Notes)
 	cmp("tags", a.Tags, b.Tags)
-	cmp("group", a.GroupID, b.GroupID)
+	cmp("groups", a.Groups, b.Groups)
 	cmp("favorite", a.Favorite, b.Favorite)
 	if out == nil {
 		out = []string{}
@@ -427,7 +474,7 @@ func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 var knownActionFilters = []string{
-	"auth.", "device.", "group.", "settings.", "connection.", "credential.", "session.", "file.", "ssh.", "user.", "team.", "inventory.", "snippet.",
+	"auth.", "device.", "group.", "settings.", "connection.", "credential.", "session.", "file.", "ssh.", "user.", "team.", "inventory.", "snippet.", "system.",
 	"auth.login", "auth.logout", "auth.setup", "auth.password_change", "auth.password_reset", "auth.sessions_revoked",
 	"session.start", "session.end", "session.terminate", "connection.identity_pinned",
 }

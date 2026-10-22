@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import clsx from "clsx";
 import { Select } from "@/components/ui/Select";
-import { Check, Info } from "lucide-react";
+import { Check, Info, X } from "lucide-react";
 import { Dialog } from "./ui/Dialog";
 import { Button } from "./ui/Button";
 import { Field } from "./ui/Field";
 import { TagInput } from "./TagInput";
+import { LocationPicker, emptyLocation, parseLocation, type LocationDraft } from "./LocationPicker";
+import { ProtocolBadge } from "./Status";
+import { useToast } from "./ui/Toast";
 import { OsIcon } from "./OsIcon";
 import { ApiError, errorMessage, post, put } from "@/lib/api";
 import type { Device, DeviceType, Group, OS, Protocol } from "@/lib/types";
@@ -21,7 +24,8 @@ interface FormState {
   description: string;
   notes: string;
   tags: string[];
-  group_id: string;
+  /** The groups the device is in; the first is its main group. */
+  group_ids: string[];
   favorite: boolean;
   mac: string;
   wol_broadcast: string;
@@ -36,7 +40,7 @@ const empty: FormState = {
   description: "",
   notes: "",
   tags: [],
-  group_id: "",
+  group_ids: [],
   favorite: false,
   mac: "",
   wol_broadcast: "",
@@ -117,18 +121,27 @@ export function DeviceFormDialog({
   open,
   onOpenChange,
   device,
+  cloneFrom,
   onSaved,
   defaultGroupId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   device?: Device;
+  /** Make a new device from this one: the same kind, group, tags, place and connection methods, with its own name and address. */
+  cloneFrom?: Device;
   onSaved?: (d: Device) => void;
   defaultGroupId?: string;
 }) {
+  const toast = useToast();
+  const [loc, setLoc] = useState<LocationDraft>(emptyLocation);
+  const [copySecrets, setCopySecrets] = useState(true);
   const [step, setStep] = useState(0);
   const [f, setF] = useState<FormState>(empty);
+  // Groups to create when the device is saved, and the name being typed for one.
+  const [pendingGroups, setPendingGroups] = useState<string[]>([]);
   const [newGroup, setNewGroup] = useState("");
+  const [addingGroup, setAddingGroup] = useState(false);
   const [methods, setMethods] = useState<Partial<Record<Protocol, number>>>({ rdp: 3389 });
   const [signIn, setSignIn] = useState<"prompt" | "store" | "credential">("prompt");
   const [credentialId, setCredentialId] = useState("");
@@ -143,6 +156,7 @@ export function DeviceFormDialog({
   const devices = useDevices();
   const invalidate = useInvalidateInventory();
   const editing = !!device;
+  const cloning = !!cloneFrom && !device;
 
   const tagSuggestions = useMemo(
     () => Array.from(new Set((devices.data ?? []).flatMap((d) => d.tags))).sort(),
@@ -155,12 +169,33 @@ export function DeviceFormDialog({
     setFormError("");
     setStep(0);
     setNewGroup("");
+    setPendingGroups([]);
+    setAddingGroup(false);
     setUsername("");
     setPassword("");
     setDomain("");
     setSignIn("prompt");
     setCredentialId("");
-    if (device) {
+    setCopySecrets(true);
+    const src = device ?? cloneFrom;
+    setLoc(src?.location ? { label: src.location.label, lat: String(src.location.latitude), lon: String(src.location.longitude) } : emptyLocation);
+    if (cloneFrom && !device) {
+      // A clone is another machine: it keeps the kind of device, group, tags and place, not the name, address or MAC.
+      setF({
+        name: `${cloneFrom.name} (copy)`,
+        hostname: "",
+        address: "",
+        os: cloneFrom.os,
+        device_type: cloneFrom.device_type,
+        description: cloneFrom.description,
+        notes: cloneFrom.notes,
+        tags: cloneFrom.tags,
+        group_ids: cloneFrom.groups.map((g) => g.id),
+        favorite: false,
+        mac: "",
+        wol_broadcast: "",
+      });
+    } else if (device) {
       setF({
         name: device.name,
         hostname: device.hostname,
@@ -170,16 +205,16 @@ export function DeviceFormDialog({
         description: device.description,
         notes: device.notes,
         tags: device.tags,
-        group_id: device.group_id ?? "",
+        group_ids: device.groups.map((g) => g.id),
         favorite: device.favorite,
         mac: device.mac ?? "",
         wol_broadcast: device.wol_broadcast ?? "",
       });
     } else {
-      setF({ ...empty, group_id: defaultGroupId && defaultGroupId !== "none" ? defaultGroupId : "" });
+      setF({ ...empty, group_ids: defaultGroupId && defaultGroupId !== "none" ? [defaultGroupId] : [] });
       setMethods({ rdp: 3389 });
     }
-  }, [open, device, defaultGroupId]);
+  }, [open, device, cloneFrom, defaultGroupId]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((s) => ({ ...s, [k]: v }));
 
@@ -197,22 +232,23 @@ export function DeviceFormDialog({
     const e: Record<string, string> = {};
     if (!f.name.trim()) e.name = "Give the device a name";
     if (!f.address.trim()) e.address = "Enter the IP address or hostname";
-    if (f.group_id === NEW_GROUP && !newGroup.trim()) e.group_id = "Enter a name for the new group";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const resolveGroup = async (): Promise<string | null> => {
-    if (f.group_id === NEW_GROUP) {
-      const g = await post<Group>("/api/groups", { name: newGroup.trim(), description: "" });
-      set("group_id", g.id);
-      return g.id;
+  // The chosen groups, with the new ones created now (a name typed but not added yet counts as added).
+  const resolveGroups = async (): Promise<string[]> => {
+    const ids = [...f.group_ids];
+    const names = [...pendingGroups, ...(addingGroup && newGroup.trim() ? [newGroup.trim()] : [])];
+    for (const name of names) {
+      const g = await post<Group>("/api/groups", { name, description: "" });
+      ids.push(g.id);
     }
-    return f.group_id || null;
+    return ids;
   };
 
   const save = async () => {
-    if (!editing && signIn === "credential" && !credentialId) {
+    if (!editing && !cloning && signIn === "credential" && !credentialId) {
       setErrors({ credential_id: "Choose a saved credential" });
       setFormError("Choose a saved credential, or pick another sign-in option.");
       return;
@@ -220,11 +256,33 @@ export function DeviceFormDialog({
     setBusy(true);
     setFormError("");
     try {
-      const group_id = await resolveGroup();
-      const body = { ...f, group_id };
+      const group_ids = await resolveGroups();
+      const place = parseLocation(loc);
+      if ((loc.lat.trim() !== "" || loc.lon.trim() !== "") && !place) {
+        setErrors({ location: "Latitude is between -90 and 90 and longitude between -180 and 180." });
+        setFormError("The location is not valid.");
+        setBusy(false);
+        return;
+      }
+      // Editing always sends the location (an empty one clears it); a new device only when one was chosen.
+      const location = place ? { label: place.label, latitude: place.latitude, longitude: place.longitude } : editing ? { label: "", latitude: null, longitude: null } : undefined;
+      const body = { ...f, group_ids, ...(location ? { location } : {}) };
       let saved: Device;
       if (device) {
         saved = await put<Device>(`/api/devices/${device.id}`, body);
+      } else if (cloneFrom) {
+        const r = await post<{ device: Device; connections_copied: number; secrets_copied: number; skipped: string[]; secrets_not_copied: boolean }>(`/api/devices/${cloneFrom.id}/clone`, {
+          ...body,
+          copy_connections: true,
+          copy_secrets: copySecrets,
+        });
+        saved = r.device;
+        toast.success(
+          `Cloned from ${cloneFrom.name}: ${r.connections_copied} connection method${r.connections_copied === 1 ? "" : "s"}` +
+            (r.secrets_copied ? `, ${r.secrets_copied} with the saved sign-in` : "") +
+            (r.secrets_not_copied ? ". Saved sign-ins were not copied because the original belongs to someone else." : "."),
+        );
+        if (r.skipped.length) toast.error(`Not copied: ${r.skipped.join(", ")}`);
       } else {
         saved = await post<Device>("/api/devices", body);
         const store = signIn === "store" && (username || password);
@@ -248,7 +306,7 @@ export function DeviceFormDialog({
     } catch (err) {
       if (err instanceof ApiError && err.fields) {
         setErrors(err.fields);
-        if (["name", "address", "hostname", "os", "device_type", "group_id", "tags"].some((k) => k in err.fields)) setStep(0);
+        if (["name", "address", "hostname", "os", "device_type", "group_ids", "tags", "location", "location.label", "location.latitude", "location.longitude"].some((k) => k in err.fields)) setStep(0);
       }
       setFormError(errorMessage(err));
     } finally {
@@ -260,7 +318,7 @@ export function DeviceFormDialog({
     e.preventDefault();
     if (step === 0) {
       if (!validateStep0()) return;
-      if (editing) save();
+      if (editing || cloning) save();
       else setStep(1);
       return;
     }
@@ -273,8 +331,8 @@ export function DeviceFormDialog({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title={editing ? "Edit device" : "Add device"}
-      description={editing ? device!.name : <Steps step={step} />}
+      title={editing ? "Edit device" : cloning ? "Clone device" : "Add device"}
+      description={editing ? device!.name : cloning ? `From ${cloneFrom!.name}` : <Steps step={step} />}
       size="xl"
       footer={
         <>
@@ -289,7 +347,7 @@ export function DeviceFormDialog({
             </Button>
           )}
           <Button variant="primary" type="submit" form="device-form" loading={busy} disabled={step === 1 && chosen.length === 0}>
-            {editing ? "Save changes" : step === 0 ? "Continue" : "Add device"}
+            {editing ? "Save changes" : cloning ? "Create clone" : step === 0 ? "Continue" : "Add device"}
           </Button>
         </>
       }
@@ -326,19 +384,70 @@ export function DeviceFormDialog({
               <Field label="IP address or hostname" hint={editing ? undefined : "The address emremote connects to."} error={errors.address}>
                 <input className="input font-mono" value={f.address} onChange={(e) => set("address", e.target.value)} placeholder="192.168.1.20" spellCheck={false} autoCapitalize="off" />
               </Field>
-              <Field label="Group" optional error={errors.group_id}>
+              <Field label="Groups" optional error={errors.group_ids} hint="A device can be in several groups. The first one is its main group.">
                 <div className="space-y-2">
-                  <Select className="input" value={f.group_id} onChange={(e) => set("group_id", e.target.value)}>
-                    <option value="">No group</option>
-                    {(groups.data ?? []).map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.name}
-                      </option>
-                    ))}
-                    <option value={NEW_GROUP}>+ Create new group…</option>
-                  </Select>
-                  {f.group_id === NEW_GROUP && (
-                    <input className="input" value={newGroup} onChange={(e) => setNewGroup(e.target.value)} placeholder="New group name" maxLength={64} autoFocus aria-label="New group name" />
+                  {(f.group_ids.length > 0 || pendingGroups.length > 0) && (
+                    <ul className="flex flex-wrap gap-1.5" aria-label="Groups of this device">
+                      {f.group_ids.map((id) => (
+                        <li key={id} className="flex items-center gap-1 rounded-full border border-border bg-surface-2 py-0.5 pl-2.5 pr-1 text-xs">
+                          {groups.data?.find((g) => g.id === id)?.name ?? "Group"}
+                          <button type="button" className="rounded-full p-0.5 text-subtle hover:bg-surface-3 hover:text-fg" aria-label={`Remove from ${groups.data?.find((g) => g.id === id)?.name ?? "the group"}`} onClick={() => set("group_ids", f.group_ids.filter((x) => x !== id))}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </li>
+                      ))}
+                      {pendingGroups.map((name) => (
+                        <li key={name} className="flex items-center gap-1 rounded-full border border-dashed border-border-strong bg-surface-2 py-0.5 pl-2.5 pr-1 text-xs italic">
+                          {name} <span className="not-italic text-subtle">(new)</span>
+                          <button type="button" className="rounded-full p-0.5 text-subtle hover:bg-surface-3 hover:text-fg" aria-label={`Do not create ${name}`} onClick={() => setPendingGroups(pendingGroups.filter((x) => x !== name))}>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {addingGroup ? (
+                    <div className="flex gap-2">
+                      <input
+                        className="input"
+                        value={newGroup}
+                        onChange={(e) => setNewGroup(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            const n = newGroup.trim();
+                            if (n && !pendingGroups.includes(n)) setPendingGroups([...pendingGroups, n]);
+                            setNewGroup("");
+                            setAddingGroup(false);
+                          }
+                        }}
+                        placeholder="New group name, then Enter"
+                        maxLength={64}
+                        autoFocus
+                        aria-label="New group name"
+                      />
+                      <Button type="button" onClick={() => { setNewGroup(""); setAddingGroup(false); }}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      className="input"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value === NEW_GROUP) setAddingGroup(true);
+                        else if (e.target.value) set("group_ids", [...f.group_ids, e.target.value]);
+                      }}
+                      aria-label="Add to a group"
+                    >
+                      <option value="">{f.group_ids.length || pendingGroups.length ? "Add to another group…" : "No group"}</option>
+                      {(groups.data ?? []).filter((g) => !f.group_ids.includes(g.id)).map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                        </option>
+                      ))}
+                      <option value={NEW_GROUP}>+ Create new group…</option>
+                    </Select>
                   )}
                 </div>
               </Field>
@@ -351,7 +460,38 @@ export function DeviceFormDialog({
                   ))}
                 </Select>
               </Field>
+              <Field label="Location" optional hint="Shown on the map on the Overview page.">
+                <LocationPicker value={loc} onChange={setLoc} error={errors.location} />
+              </Field>
             </div>
+
+            {cloning && cloneFrom && (
+              <div className="rounded-xl border border-border bg-surface-2/40 px-4 py-3 text-[13px]">
+                <p className="font-medium">Copied from {cloneFrom.name}</p>
+                {cloneFrom.connections.length ? (
+                  <>
+                    <p className="mt-1.5 flex flex-wrap items-center gap-2 text-muted">
+                      Connection methods:
+                      {cloneFrom.connections.map((c) => (
+                        <span key={c.id} className="inline-flex items-center gap-1.5">
+                          <ProtocolBadge protocol={c.protocol} />
+                          <span className="font-mono text-xs text-subtle">:{c.port}</span>
+                        </span>
+                      ))}
+                    </p>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2 text-muted">
+                      <input type="checkbox" className="mt-0.5" checked={copySecrets} onChange={(e) => setCopySecrets(e.target.checked)} />
+                      <span>
+                        Copy the saved passwords and keys too
+                        <span className="block text-xs text-subtle">Only when the original is yours (or shared and you are an administrator). The new machine's SSH host key and RDP certificate are recorded on its first connection.</span>
+                      </span>
+                    </label>
+                  </>
+                ) : (
+                  <p className="mt-1 text-muted">The original has no connection methods; add them on the new device.</p>
+                )}
+              </div>
+            )}
 
             {(() => {
               const details = (

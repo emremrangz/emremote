@@ -245,7 +245,8 @@ func (s *Store) Statistics(ctx context.Context, u *User, days int, tz string) (*
 		func(k string, n int) { st.Fleet.Tags = append(st.Fleet.Tags, NameCount{k, n}) }); err != nil {
 		return nil, err
 	}
-	if err := count(`SELECT g.name, count(d.id) FROM device_groups g LEFT JOIN devices d ON d.group_id = g.id AND d.id IN (SELECT emr_visible_devices($1))
+	if err := count(`SELECT g.name, count(d.id) FROM device_groups g LEFT JOIN device_group_members m ON m.group_id = g.id
+		LEFT JOIN devices d ON d.id = m.device_id AND d.id IN (SELECT emr_visible_devices($1))
 		WHERE g.id IN (SELECT emr_visible_groups($1)) GROUP BY g.id, g.name ORDER BY 2 DESC, g.name LIMIT 8`,
 		func(k string, n int) { st.Fleet.Groups = append(st.Fleet.Groups, NameCount{k, n}) }); err != nil {
 		return nil, err

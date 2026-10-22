@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AppWindow,
+  CopyPlus,
+  MapPin,
   ChevronRight,
   Pencil,
   Trash2,
@@ -111,6 +113,7 @@ export default function DeviceDetailPage() {
   const check = useCheckDevice();
   const fav = useToggleFavorite();
   const [editing, setEditing] = useState(false);
+  const [cloning, setCloning] = useState(false);
   const [waking, setWaking] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [connForm, setConnForm] = useState<{ open: boolean; connection?: Connection; protocol?: Protocol; tab?: ConnectionTab }>({ open: false });
@@ -125,11 +128,14 @@ export default function DeviceDetailPage() {
   const sshConn = (connections.data ?? []).find((c) => c.protocol === "ssh" && c.status_reachable === true && (c.credential_id || (c.username && c.secret_fields.length > 0)));
   const hasRdp = (connections.data ?? []).some((c) => c.protocol === "rdp");
   useEffect(() => {
-    if (!dev || !dev.can_manage || tried.current.has(dev.id)) return;
-    const f = dev.facts as { collected_at?: string; source?: string };
+    // ESXi has no system overview (its shell is not a Linux shell): nothing to learn.
+    if (!dev || !dev.can_manage || dev.os === "esxi" || tried.current.has(dev.id)) return;
+    const f = dev.facts as { collected_at?: string; source?: string; kernel?: string; os?: string };
     const fresh = !!f.collected_at && Date.now() - new Date(f.collected_at).getTime() < 24 * 3600 * 1000;
     if (sshConn) {
-      if (fresh && "virtualization" in dev.facts) return;
+      // A Proxmox host that was read before emremote knew Proxmox still says "Debian": read it again once.
+      const oldProxmox = /-pve\b/.test(f.kernel ?? "") && !/proxmox/i.test(f.os ?? "");
+      if (fresh && "virtualization" in dev.facts && !oldProxmox) return;
       tried.current.add(dev.id);
       (async () => {
         let access: { id: string } | null = null;
@@ -170,6 +176,7 @@ export default function DeviceDetailPage() {
             <Link to={`/devices?group=${d.group_id}`} className="hover:text-fg">
               {d.group_name}
             </Link>
+            {d.groups.length > 1 && <span className="text-subtle">+{d.groups.length - 1}</span>}
           </>
         )}
         <ChevronRight className="h-3.5 w-3.5" />
@@ -270,6 +277,11 @@ export default function DeviceDetailPage() {
               <MenuItem icon={<RefreshCw className="h-4 w-4" />} disabled={!conns.length} onSelect={() => check.mutate(d.id)}>
                 Check reachability now
               </MenuItem>
+              {can("inventory.manage") && (
+                <MenuItem icon={<CopyPlus className="h-4 w-4" />} onSelect={() => setCloning(true)}>
+                  Clone device
+                </MenuItem>
+              )}
               {d.can_manage && (
                 <>
                   <MenuSeparator />
@@ -292,7 +304,7 @@ export default function DeviceDetailPage() {
             ["activity", "Activity"],
           ] as const
         )
-          .filter(([key]) => (canFiles || (key !== "system" && key !== "files")) && !(d.os === "network" && key === "files"))
+          .filter(([key]) => (canFiles || (key !== "system" && key !== "files")) && !(d.os === "network" && key === "files") && !(d.os === "esxi" && key === "system"))
           .map(([key, label]) => (
           <button
             key={key}
@@ -506,8 +518,30 @@ export default function DeviceDetailPage() {
                   </dd>
                 </>
               )}
-              <dt className="text-subtle">Group</dt>
-              <dd>{d.group_name ?? <span className="text-subtle">None</span>}</dd>
+              {d.location && (
+                <>
+                  <dt className="text-subtle">Location</dt>
+                  <dd className="flex items-start gap-1.5" title={`${d.location.latitude.toFixed(3)}, ${d.location.longitude.toFixed(3)}`}>
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />
+                    <span className="min-w-0 break-words">{d.location.label || `${d.location.latitude.toFixed(2)}, ${d.location.longitude.toFixed(2)}`}</span>
+                  </dd>
+                </>
+              )}
+              <dt className="text-subtle">{d.groups.length > 1 ? "Groups" : "Group"}</dt>
+              <dd className="flex flex-wrap gap-x-2 gap-y-0.5">
+                {d.groups.length ? (
+                  d.groups.map((g, i) => (
+                    <span key={g.id}>
+                      <Link to={`/devices?group=${g.id}`} className="hover:text-accent hover:underline">
+                        {g.name}
+                      </Link>
+                      {i < d.groups.length - 1 ? "," : ""}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-subtle">None</span>
+                )}
+              </dd>
               <dt className="text-subtle">Tags</dt>
               <dd className="flex flex-wrap gap-1">{d.tags.length ? d.tags.map((t) => <Badge key={t}>{t}</Badge>) : <span className="text-subtle">-</span>}</dd>
               <dt className="text-subtle">Last access</dt>
@@ -531,6 +565,7 @@ export default function DeviceDetailPage() {
       )}
 
       <DeviceFormDialog open={editing} onOpenChange={setEditing} device={d} />
+      <DeviceFormDialog open={cloning} onOpenChange={setCloning} cloneFrom={d} onSaved={(nd) => navigate(`/devices/${nd.id}`)} />
       <ConnectionFormDialog
         open={connForm.open}
         onOpenChange={(o) => setConnForm((s) => ({ ...s, open: o }))}

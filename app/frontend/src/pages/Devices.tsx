@@ -12,6 +12,7 @@ import {
   Pencil,
   Trash2,
   AppWindow,
+  CopyPlus,
   Play,
   FolderTree,
   Monitor,
@@ -129,7 +130,7 @@ function FavoriteButton({ device }: { device: Device }) {
   );
 }
 
-function RowMenu({ device, onEdit, onDelete }: { device: Device; onEdit: () => void; onDelete: () => void }) {
+function RowMenu({ device, onEdit, onClone, onDelete }: { device: Device; onEdit: () => void; onClone?: () => void; onDelete: () => void }) {
   const check = useCheckDevice();
   const toast = useToast();
   return (
@@ -156,6 +157,11 @@ function RowMenu({ device, onEdit, onDelete }: { device: Device; onEdit: () => v
         >
           Check reachability
         </MenuItem>
+        {onClone && (
+          <MenuItem icon={<CopyPlus className="h-4 w-4" />} onSelect={onClone}>
+            Clone device
+          </MenuItem>
+        )}
         {device.can_manage && (
           <>
             <MenuSeparator />
@@ -202,6 +208,7 @@ export default function DevicesPage({ favoritesOnly }: { favoritesOnly?: boolean
   const { can } = useAccess();
   const canAdd = can("inventory.manage");
   const [editing, setEditing] = useState<Device | null>(null);
+  const [cloning, setCloning] = useState<Device | null>(null);
   const [deleting, setDeleting] = useState<Device | null>(null);
 
   const allTags = useMemo(
@@ -214,11 +221,11 @@ export default function DevicesPage({ favoritesOnly }: { favoritesOnly?: boolean
     return (devices.data ?? []).filter((d) => {
       if (favoritesOnly && !d.favorite) return false;
       if (os && d.os !== os) return false;
-      if (group === "none" ? d.group_id !== null : group && d.group_id !== group) return false;
+      if (group === "none" ? d.groups.length > 0 : group && !d.groups.some((g) => g.id === group)) return false;
       if (protocol && !d.connections.some((c) => c.protocol === protocol)) return false;
       if (tag && !d.tags.includes(tag)) return false;
       if (!needle) return true;
-      return [d.name, d.hostname, d.address, d.description, d.group_name ?? "", ...d.tags].some((v) =>
+      return [d.name, d.hostname, d.address, d.description, ...d.groups.map((g) => g.name), ...d.tags].some((v) =>
         v.toLowerCase().includes(needle),
       );
     });
@@ -316,7 +323,7 @@ export default function DevicesPage({ favoritesOnly }: { favoritesOnly?: boolean
               <td className="py-2.5 pr-3" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-end gap-1">
                   <ConnectButton device={d} />
-                  <RowMenu device={d} onEdit={() => setEditing(d)} onDelete={() => setDeleting(d)} />
+                  <RowMenu device={d} onEdit={() => setEditing(d)} onClone={can("inventory.manage") ? () => setCloning(d) : undefined} onDelete={() => setDeleting(d)} />
                 </div>
               </td>
             </tr>
@@ -346,7 +353,7 @@ export default function DevicesPage({ favoritesOnly }: { favoritesOnly?: boolean
             </div>
             <div onClick={(e) => e.stopPropagation()} className="-mr-1 -mt-1 flex items-center">
               <FavoriteButton device={d} />
-              <RowMenu device={d} onEdit={() => setEditing(d)} onDelete={() => setDeleting(d)} />
+              <RowMenu device={d} onEdit={() => setEditing(d)} onClone={can("inventory.manage") ? () => setCloning(d) : undefined} onDelete={() => setDeleting(d)} />
             </div>
           </div>
           {d.description && <p className="mt-3 line-clamp-2 text-xs text-muted">{d.description}</p>}
@@ -502,6 +509,7 @@ export default function DevicesPage({ favoritesOnly }: { favoritesOnly?: boolean
 
       <DeviceFormDialog open={adding} onOpenChange={setAdding} defaultGroupId={group} onSaved={(d) => navigate(`/devices/${d.id}`)} />
       <DeviceFormDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} device={editing ?? undefined} />
+      <DeviceFormDialog open={!!cloning} onOpenChange={(o) => !o && setCloning(null)} cloneFrom={cloning ?? undefined} onSaved={(nd) => navigate(`/devices/${nd.id}`)} />
       <ConfirmDialog
         open={!!deleting}
         onOpenChange={(o) => !o && setDeleting(null)}

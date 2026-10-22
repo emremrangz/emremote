@@ -35,17 +35,21 @@ type importConn struct {
 }
 
 type importDevice struct {
-	Name        string       `json:"name"`
-	Hostname    string       `json:"hostname"`
-	Address     string       `json:"address"`
-	OS          string       `json:"os"`
-	DeviceType  string       `json:"device_type"`
-	Description string       `json:"description"`
-	Notes       string       `json:"notes"`
-	Tags        []string     `json:"tags"`
-	Group       string       `json:"group"`
+	Name        string   `json:"name"`
+	Hostname    string   `json:"hostname"`
+	Address     string   `json:"address"`
+	OS          string   `json:"os"`
+	DeviceType  string   `json:"device_type"`
+	Description string   `json:"description"`
+	Notes       string   `json:"notes"`
+	Tags        []string `json:"tags"`
+	Group       string   `json:"group"`
+	// Groups lists every group of the device (JSON files only); Group is the first.
+	Groups      []string     `json:"groups,omitempty"`
 	Favorite    bool         `json:"favorite"`
 	Connections []importConn `json:"connections"`
+	// Location is where the device is (JSON files only).
+	Location *locationRequest `json:"location,omitempty"`
 }
 
 type importGroup struct {
