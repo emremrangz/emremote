@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,9 +49,18 @@ func ValidateAddress(s string) error {
 }
 
 type Policy struct {
+	mu       sync.RWMutex // guards allowed, which an administrator can change while the server runs
 	allowed  []netip.Prefix
 	denied   []netip.Prefix
 	resolver *net.Resolver
+}
+
+// SetAllowed replaces the allowed networks. The reserved addresses and the denied networks still apply
+// to everything, however wide the allowed networks are.
+func (p *Policy) SetAllowed(allowed []netip.Prefix) {
+	p.mu.Lock()
+	p.allowed = slices.Clone(allowed)
+	p.mu.Unlock()
 }
 
 func New(allowed, denied []netip.Prefix) *Policy {
@@ -82,11 +92,15 @@ func (p *Policy) DenyLocalInterfaces() error {
 	return nil
 }
 
-func (p *Policy) Allowed() []netip.Prefix { return slices.Clone(p.allowed) }
-func (p *Policy) Denied() []netip.Prefix  { return slices.Clone(p.denied) }
+func (p *Policy) Allowed() []netip.Prefix {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return slices.Clone(p.allowed)
+}
+func (p *Policy) Denied() []netip.Prefix { return slices.Clone(p.denied) }
 
 // Check reports whether a single IP may be used as a target.
-func (p *Policy) Check(addr netip.Addr) error { return p.checkIn(addr, p.allowed) }
+func (p *Policy) Check(addr netip.Addr) error { return p.checkIn(addr, p.Allowed()) }
 
 // CheckBehindJump is Check for a target that is only reachable through a jump
 // host: it must lie in one of the jump target networks instead of the usual
@@ -97,7 +111,9 @@ func (p *Policy) CheckBehindJump(addr netip.Addr, networks []netip.Prefix) error
 
 func (p *Policy) checkIn(addr netip.Addr, allowed []netip.Prefix) error {
 	addr = addr.Unmap()
-	if !addr.IsValid() || addr.IsUnspecified() || addr.IsLoopback() || addr.IsMulticast() ||
+	// Link-local unicast covers 169.254.0.0/16, where cloud providers keep their metadata service
+	// (169.254.169.254): never a target, even when every address is allowed.
+	if !addr.IsValid() || addr.IsUnspecified() || addr.IsLoopback() || addr.IsMulticast() || addr.IsLinkLocalUnicast() ||
 		addr.IsInterfaceLocalMulticast() || addr.IsLinkLocalMulticast() || addr == netip.MustParseAddr("255.255.255.255") {
 		return fmt.Errorf("%w: %s is a reserved address", ErrNotAllowed, addr)
 	}

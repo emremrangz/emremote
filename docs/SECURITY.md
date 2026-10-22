@@ -56,6 +56,7 @@ protects against, what it assumes, and where its limits are.
 
 ### Target network policy (SSRF protection)
 
+- Administrators can change the allowed networks in **Settings → Allowed target networks** (what is saved there replaces the variable and applies at once; 0.0.0.0 or :: allows every address, after a warning). Loopback, link-local addresses (including the cloud metadata service at 169.254.169.254), multicast and emremote's own container networks are refused whatever the list says.
 - `EMREMOTE_ALLOWED_TARGET_NETWORKS` (default: RFC 1918 ranges, `100.64.0.0/10`, `fc00::/7`) is the
   allow-list. Narrow it to the LAN segments that contain your computers.
 - Always denied: loopback, unspecified, multicast and broadcast addresses, link-local addresses

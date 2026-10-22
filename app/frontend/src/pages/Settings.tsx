@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer } from "lucide-react";
+import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer, Globe } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader, Badge, ErrorState } from "@/components/ui/misc";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,7 @@ import { useAuth, useAccess } from "@/lib/auth";
 import { useTheme, type ThemePref } from "@/lib/theme";
 import { dateTime, duration, relativeTime } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProtocolBadge } from "@/components/Status";
 
 function Card({ title, description, children, icon, id }: { title: string; description?: ReactNode; children: ReactNode; icon?: ReactNode; id?: string }) {
@@ -200,6 +201,124 @@ function JumpHostCard() {
           Save
         </Button>
       </div>
+    </Card>
+  );
+}
+
+interface TargetNetworks {
+  networks: string[];
+  saved: boolean;
+  env: string[];
+  everywhere: boolean;
+}
+
+/** Whether a line means "every address": 0.0.0.0, ::, or any network with a /0 length. */
+const meansEverywhere = (line: string) => /^(0\.0\.0\.0|::)(\/0)?$/.test(line.trim());
+
+function TargetNetworksCard() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [loaded, setLoaded] = useState(false);
+  const [text, setText] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [everywhere, setEverywhere] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const apply = (r: TargetNetworks) => {
+    setText(r.networks.join("\n"));
+    setSaved(r.saved);
+    setEverywhere(r.everywhere);
+    qc.invalidateQueries({ queryKey: keys.system });
+  };
+  useEffect(() => {
+    get<TargetNetworks>("/api/settings/targets")
+      .then((r) => {
+        apply(r);
+        setLoaded(true);
+      })
+      .catch((e) => setError(errorMessage(e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const lines = () => text.split(/[\s,;]+/).filter(Boolean);
+  const wantsEverywhere = lines().some(meansEverywhere);
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      apply(await put<TargetNetworks>("/api/settings/targets", { networks: lines() }));
+      toast.success("Allowed networks saved. They apply at once.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const reset = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      apply(await del<TargetNetworks>("/api/settings/targets"));
+      toast.success("Back to the default from the environment.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card
+      title="Allowed target networks"
+      description="Which addresses emremote may connect to. Your own network is allowed by default; add a public server, or a whole range, here."
+      icon={<Globe className="h-4 w-4" />}
+    >
+      <div className="space-y-3">
+        <Field label="Networks" hint="One per line. A single address (137.23.43.108) or a network (192.168.50.0/24). 0.0.0.0 allows every IPv4 address and :: every IPv6 address." error={error || undefined}>
+          <textarea
+            className="input min-h-[120px] font-mono text-xs"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="10.0.0.0/8&#10;137.23.43.108"
+            spellCheck={false}
+            disabled={!loaded}
+            aria-label="Allowed target networks"
+          />
+        </Field>
+        {everywhere && (
+          <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+            Every address is allowed right now: emremote can be pointed at any server that the machine it runs on can reach.
+          </p>
+        )}
+        {!saved && loaded && <p className="text-xs text-subtle">These come from EMREMOTE_ALLOWED_TARGET_NETWORKS (or the built-in default). Saving here replaces them without a restart.</p>}
+        <p className="text-xs text-subtle">
+          Always refused, whatever is listed: this machine itself (loopback), link-local addresses (this includes the cloud metadata service at 169.254.169.254),
+          multicast, and emremote's own container networks. Every connection is checked against this list again when it is made.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="primary" onClick={() => (wantsEverywhere ? setConfirming(true) : save())} loading={busy} disabled={!loaded}>
+            Save
+          </Button>
+          {saved && (
+            <Button onClick={reset} disabled={busy}>
+              Use the default
+            </Button>
+          )}
+        </div>
+      </div>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Allow every address?"
+        confirmLabel="Allow every address"
+        onConfirm={async () => {
+          await save();
+        }}
+      >
+        <p>
+          With 0.0.0.0 or ::, emremote may connect to any address on the internet that this server can reach, not only your own network. Anyone who can
+          add devices (administrators and members with that permission) can then aim it anywhere. Prefer listing the few servers you really need.
+        </p>
+      </ConfirmDialog>
     </Card>
   );
 }
@@ -531,6 +650,7 @@ export default function SettingsPage() {
           </div>
         </Card>
         <TerminalCard />
+        {isAdmin && <TargetNetworksCard />}
         {isAdmin && <JumpHostCard />}
         {isAdmin && <SessionLimitsCard />}
         <PasswordCard />

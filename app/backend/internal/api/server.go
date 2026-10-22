@@ -323,6 +323,9 @@ func (s *Server) Handler() http.Handler {
 
 	a("GET /api/settings/jump", s.adminOnly(s.handleGetJumpSettings))
 	a("PUT /api/settings/jump", s.adminOnly(s.handleSetJumpSettings))
+	a("GET /api/settings/targets", s.adminOnly(s.handleGetTargetNetworks))
+	a("PUT /api/settings/targets", s.adminOnly(s.handleSetTargetNetworks))
+	a("DELETE /api/settings/targets", s.adminOnly(s.handleResetTargetNetworks))
 	a("GET /api/settings/sessions", s.adminOnly(s.handleGetSessionLimits))
 	a("PUT /api/settings/sessions", s.adminOnly(s.handleSetSessionLimits))
 

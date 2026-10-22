@@ -238,6 +238,12 @@ func (s *Store) GetSetting(ctx context.Context, key string) (value []byte, ok bo
 }
 
 // SetSetting saves a server-wide setting.
+// DeleteSetting removes a saved server-wide setting, so its default applies again.
+func (s *Store) DeleteSetting(ctx context.Context, key string) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM app_settings WHERE key = $1`, key)
+	return err
+}
+
 func (s *Store) SetSetting(ctx context.Context, key string, value []byte) error {
 	_, err := s.pool.Exec(ctx, `INSERT INTO app_settings (key, value) VALUES ($1, $2)
 		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, key, value)

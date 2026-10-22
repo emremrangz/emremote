@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.12 (2026-10-22)
+
+- **Allowed target networks in Settings:** administrators add the public servers or networks emremote may connect to
+  without editing `.env` or restarting (Settings, "Allowed target networks"; one address or network per line). `0.0.0.0` or
+  `::` allows every address, after a warning. What is saved replaces `EMREMOTE_ALLOWED_TARGET_NETWORKS`; "Use the default"
+  goes back to it.
+- Link-local addresses (169.254.0.0/16, which includes the cloud metadata service) are now always refused, so a wide allowed
+  list can never reach them. Loopback, multicast and emremote's own networks were and are refused too.
+- `tests/stack.sh` starts the isolated test stack (the application, the test servers and a simulated switch) and runs the
+  end-to-end suites.
+
 ## 0.1.11 (2026-10-21)
 
 - **Right click in SSH and Telnet terminals:** with text selected it now only copies (and clears the selection) instead of

@@ -45,6 +45,9 @@ func (s *Server) LoadSettings(ctx context.Context) {
 	if raw, ok, err := s.store.GetSetting(ctx, sessionLimitsKey); err == nil && ok {
 		s.loadSessionLimits(raw)
 	}
+	if raw, ok, err := s.store.GetSetting(ctx, targetNetworksKey); err == nil && ok {
+		s.applyTargetNetworks(raw)
+	}
 	raw, ok, err := s.store.GetSetting(ctx, jumpSettingKey)
 	if err != nil || !ok {
 		return

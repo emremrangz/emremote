@@ -1169,6 +1169,28 @@ for (const addr of ["127.0.0.1", "8.8.8.8", "169.254.169.254", "localhost"]) {
   await c.del(`/api/devices/${sw.data.id}`);
 }
 
+// ---- Allowed target networks, changed in Settings ----
+{
+  const mkSsh = async (addr) => {
+    const d = await c.post("/api/devices", { name: `tn-${addr}-${stamp}`, hostname: "", address: addr, os: "linux", device_type: "server", description: "", notes: "", tags: ["e2e"], group_id: null, favorite: false });
+    const cn = await c.post(`/api/devices/${d.data.id}/connections`, { name: "SSH", protocol: "ssh", port: 22, username: "x", domain: "", credential_id: null, settings: {}, secret: { mode: "set", password: "pw-for-test-1" } });
+    return { dev: d.data.id, conn: cn.data.id };
+  };
+  const blocked = async (t) => { const r = await c.post(`/api/connections/${t.conn}/ssh-host-key`); return r.status === 422; };
+  const pub = await mkSsh("1.1.1.1"), other = await mkSsh("8.8.8.8"), meta = await mkSsh("169.254.169.254"), loop = await mkSsh("127.0.0.1");
+  const before = (await c.get("/api/settings/targets")).data;
+  check("a public address is refused by default", (await blocked(pub)) && (await blocked(other)));
+  const added = await c.put("/api/settings/targets", { networks: [...before.networks, "1.1.1.1"] });
+  check("an address added in Settings is allowed at once, others stay refused", added.status === 200 && !(await blocked(pub)) && (await blocked(other)), JSON.stringify(added.data?.networks));
+  const all = await c.put("/api/settings/targets", { networks: ["0.0.0.0"] });
+  check("0.0.0.0 allows every public address", all.data?.everywhere === true && !(await blocked(other)));
+  check("loopback and the cloud metadata address stay refused even then", (await blocked(meta)) && (await blocked(loop)));
+  check("an empty list and nonsense are rejected", (await c.put("/api/settings/targets", { networks: [] })).status === 422 && (await c.put("/api/settings/targets", { networks: ["1.2.3"] })).status === 422);
+  const reset = await c.del("/api/settings/targets");
+  check("'Use the default' goes back to the environment setting", reset.status === 200 && reset.data?.saved === false && (await blocked(pub)));
+  for (const t of [pub, other, meta, loop]) await c.del(`/api/devices/${t.dev}`);
+}
+
 // Cross-site WebSocket hijacking: wrong Origin is rejected.
 const t2 = await c.post(`/api/connections/${vnc.data.id}/sessions`, { width: 800, height: 600, dpi: 96, image: ["image/png"], audio: [], video: [], timezone: "" });
 const evil = await wsStatus(`/api/tunnel?ticket=${encodeURIComponent(t2.data.ticket)}`, { Origin: "https://evil.example", Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") });

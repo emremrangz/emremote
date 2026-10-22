@@ -73,3 +73,30 @@ func TestCheckBehindJump(t *testing.T) {
 		t.Error("an empty list allows nothing")
 	}
 }
+
+func TestSetAllowedAndEverywhere(t *testing.T) {
+	p := New([]netip.Prefix{netip.MustParsePrefix("10.0.0.0/8")}, []netip.Prefix{netip.MustParsePrefix("172.31.250.0/24")})
+	pub := netip.MustParseAddr("137.23.43.108")
+	if p.Check(pub) == nil {
+		t.Fatal("a public address must be refused by default")
+	}
+	p.SetAllowed([]netip.Prefix{netip.MustParsePrefix("137.23.43.108/32")})
+	if err := p.Check(pub); err != nil {
+		t.Fatalf("an added address must be allowed: %v", err)
+	}
+	if p.Check(netip.MustParseAddr("137.23.43.109")) == nil {
+		t.Fatal("only the added address is allowed")
+	}
+	// Every address: the reserved and denied ranges still hold.
+	p.SetAllowed([]netip.Prefix{netip.MustParsePrefix("0.0.0.0/0"), netip.MustParsePrefix("::/0")})
+	for _, ok := range []string{"137.23.43.108", "8.8.8.8", "10.1.2.3", "2606:4700::1111"} {
+		if err := p.Check(netip.MustParseAddr(ok)); err != nil {
+			t.Errorf("%s should be allowed when everything is: %v", ok, err)
+		}
+	}
+	for _, no := range []string{"127.0.0.1", "::1", "169.254.169.254", "fe80::1", "0.0.0.0", "224.0.0.1", "255.255.255.255", "172.31.250.9"} {
+		if p.Check(netip.MustParseAddr(no)) == nil {
+			t.Errorf("%s must stay refused even when everything is allowed", no)
+		}
+	}
+}
