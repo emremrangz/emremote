@@ -64,17 +64,20 @@ type Config struct {
 	LogLevel            string
 	MaxUploadBytes      int64
 	TransferDir         string
-	AutoSSHPort         int
+	// RecordingsDir is where session recordings are written (shared with the gateway).
+	RecordingsDir string
+	AutoSSHPort   int
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		ListenAddr:  env("EMREMOTE_LISTEN_ADDR", ":8080"),
-		GuacdAddr:   env("EMREMOTE_GUACD_ADDR", "guacd:4822"),
-		WebDir:      env("EMREMOTE_WEB_DIR", "/app/web"),
-		LogLevel:    env("EMREMOTE_LOG_LEVEL", "info"),
-		TransferDir: env("EMREMOTE_TRANSFER_DIR", "/transfer"),
-		StateDir:    env("EMREMOTE_STATE_DIR", "/state"),
+		ListenAddr:    env("EMREMOTE_LISTEN_ADDR", ":8080"),
+		GuacdAddr:     env("EMREMOTE_GUACD_ADDR", "guacd:4822"),
+		WebDir:        env("EMREMOTE_WEB_DIR", "/app/web"),
+		LogLevel:      env("EMREMOTE_LOG_LEVEL", "info"),
+		TransferDir:   env("EMREMOTE_TRANSFER_DIR", "/transfer"),
+		StateDir:      env("EMREMOTE_STATE_DIR", "/state"),
+		RecordingsDir: env("EMREMOTE_RECORDINGS_DIR", "/recordings"),
 	}
 	var errs []error
 

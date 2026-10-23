@@ -23,14 +23,14 @@ export function parseLocation(d: LocationDraft): { label: string; latitude: numb
 /** Choosing where a device is: search a city, click the map, or type coordinates. Nothing is sent to a map service. */
 export function LocationPicker({ value, onChange, error }: { value: LocationDraft; onChange: (v: LocationDraft) => void; error?: string }) {
   const [q, setQ] = useState("");
-  const [showMap, setShowMap] = useState(false);
   const results = useMemo(() => searchCities(q), [q]);
   const parsed = parseLocation(value);
   const invalid = (value.lat.trim() !== "" || value.lon.trim() !== "") && !parsed;
   const set = (patch: Partial<LocationDraft>) => onChange({ ...value, ...patch });
 
   return (
-    <div className="space-y-2">
+    <div className="grid items-start gap-4 md:grid-cols-2">
+      <div className="space-y-3">
       {parsed ? (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/50 px-3 py-2 text-[13px]">
           <MapPin className="h-4 w-4 shrink-0 text-accent" />
@@ -83,28 +83,23 @@ export function LocationPicker({ value, onChange, error }: { value: LocationDraf
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-        <button type="button" className="underline-offset-2 hover:text-fg hover:underline" onClick={() => setShowMap((s) => !s)} aria-expanded={showMap}>
-          {showMap ? "Hide the map" : "Choose on the map"}
-        </button>
-        <span className="text-subtle">or type</span>
-        <label className="flex items-center gap-1.5">
-          <span className="text-subtle">latitude</span>
-          <input className="input h-7 w-24 font-mono text-xs" value={value.lat} onChange={(e) => set({ lat: e.target.value })} placeholder="41.01" inputMode="decimal" aria-label="Latitude" />
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1 block text-xs text-muted">Latitude</span>
+          <input className="input font-mono" value={value.lat} onChange={(e) => set({ lat: e.target.value })} placeholder="41.01" inputMode="decimal" aria-label="Latitude" />
         </label>
-        <label className="flex items-center gap-1.5">
-          <span className="text-subtle">longitude</span>
-          <input className="input h-7 w-24 font-mono text-xs" value={value.lon} onChange={(e) => set({ lon: e.target.value })} placeholder="28.98" inputMode="decimal" aria-label="Longitude" />
+        <label className="block">
+          <span className="mb-1 block text-xs text-muted">Longitude</span>
+          <input className="input font-mono" value={value.lon} onChange={(e) => set({ lon: e.target.value })} placeholder="28.98" inputMode="decimal" aria-label="Longitude" />
         </label>
       </div>
-      {showMap && (
-        <PickMap
-          lat={parsed?.latitude}
-          lon={parsed?.longitude}
-          onPick={(lat, lon) => onChange({ label: parsed ? value.label : "", lat: String(lat), lon: String(lon) })}
-        />
-      )}
       {(error || invalid) && <p className="text-xs text-danger">{error ?? "Latitude is between -90 and 90 and longitude between -180 and 180."}</p>}
+      </div>
+      <PickMap
+        lat={parsed?.latitude}
+        lon={parsed?.longitude}
+        onPick={(lat, lon) => onChange({ label: parsed ? value.label : "", lat: String(lat), lon: String(lon) })}
+      />
     </div>
   );
 }

@@ -227,7 +227,7 @@ export default function DeviceDetailPage() {
               <Button className="min-w-[8.5rem] justify-center" icon={<AppWindow className="h-3.5 w-3.5" />} onClick={() => openQuickView(conns[0].id)} title="View here, without leaving this page">
                 Quick view
               </Button>
-              <Button className="min-w-[8.5rem] justify-center" variant="primary" icon={<Play className="h-3.5 w-3.5" />} onClick={() => launchConnection(conns[0].id)} title="Open in the workspace window">
+              <Button className="min-w-[8.5rem] justify-center" icon={<Play className="h-3.5 w-3.5" />} onClick={() => launchConnection(conns[0].id)} title="Open in the workspace window">
                 Connect
               </Button>
             </>
@@ -235,7 +235,7 @@ export default function DeviceDetailPage() {
           {canConnect && conns.length > 1 && (
             <Menu>
               <MenuTrigger asChild>
-                <Button className="min-w-[8.5rem] justify-center" variant="primary" icon={<Play className="h-3.5 w-3.5" />}>
+                <Button className="min-w-[8.5rem] justify-center" icon={<Play className="h-3.5 w-3.5" />}>
                   Connect <ChevronDown className="h-3.5 w-3.5 opacity-70" />
                 </Button>
               </MenuTrigger>
@@ -334,7 +334,7 @@ export default function DeviceDetailPage() {
       {tab === "activity" && <DeviceActivity deviceId={d.id} />}
 
       {tab === "overview" && (
-      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+      <div className="grid gap-5">
         <section className="card overflow-hidden">
           <header className="flex items-center justify-between border-b border-border px-5 py-3">
             <div>
@@ -433,7 +433,7 @@ export default function DeviceDetailPage() {
                 </button>
               )}
             </header>
-            <dl className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-2.5 px-4 py-4 text-[13px]">
+            <dl className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-2.5 px-4 py-4 text-[13px] lg:grid-cols-[100px_1fr_100px_1fr] lg:gap-x-6">
               <dt className="text-subtle">Hostname</dt>
               <dd className="flex items-center gap-1 font-mono text-xs">
                 {d.hostname || <span className="text-subtle">-</span>}

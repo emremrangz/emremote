@@ -354,6 +354,7 @@ export interface SystemInfo {
   session_idle_timeout_s: number;
   secure_cookies: boolean;
   jump_enabled?: boolean;
+  recording_enabled?: boolean;
   update_check?: boolean;
   sponsor?: boolean;
   github_stars?: number;
@@ -435,4 +436,38 @@ export interface Snippet {
   last_used_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RecordingConfig {
+  enabled: boolean;
+  record_all: boolean;
+  protocols: string[];
+  retention_days: number;
+  max_gb: number;
+  devices: Record<string, "on" | "off">;
+}
+
+export interface RecordingStorage {
+  path: string;
+  kind: "volume" | "nfs" | "smb";
+  fs_type: string;
+  writable: boolean;
+  total_bytes: number;
+  free_bytes: number;
+  count: number;
+  used_bytes: number;
+}
+
+export interface Recording {
+  id: string;
+  session_id: string;
+  user_id: string | null;
+  username: string;
+  device_id: string | null;
+  device_name: string;
+  connection_name: string;
+  protocol: string;
+  started_at: string;
+  ended_at: string | null;
+  size_bytes: number;
 }

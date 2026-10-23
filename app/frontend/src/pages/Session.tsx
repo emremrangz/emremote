@@ -119,6 +119,7 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
   const [prefs, setPrefsState] = useState<Prefs>(prefsRef.current);
   const [phase, setPhase] = useState<Phase>("loading");
   const [phaseDetail, setPhaseDetail] = useState("Preparing…");
+  const [recording, setRecording] = useState(false);
   const [error, setError] = useState<{ title: string; hint?: string; detail?: string } | null>(null);
   const [unstable, setUnstable] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -293,7 +294,7 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
       setKeyboardLayout(layout);
       let ticket: string;
       try {
-        const r = await post<{ ticket: string }>(`${connectionBase(connectionId)}/sessions`, {
+        const r = await post<{ ticket: string; recording?: boolean }>(`${connectionBase(connectionId)}/sessions`, {
           ...size,
           image: supportedImageTypes(),
           audio: Guacamole.AudioPlayer.getSupportedTypes(),
@@ -303,6 +304,7 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
           ...(conn.data!.protocol === "ssh" || conn.data!.protocol === "telnet" ? { terminal: terminalRequest(termPrefsRef.current) } : {}),
         });
         ticket = r.ticket;
+        setRecording(!!r.recording);
       } catch (e) {
         const msg = e instanceof ApiError && e.code === "target_not_allowed"
           ? { title: "This target is blocked by the server's network policy.", hint: "See EMREMOTE_ALLOWED_TARGET_NETWORKS in docs/SECURITY.md.", detail: e.message }
@@ -1233,6 +1235,11 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
             {conn.data && <OsIcon os={conn.data.device_os} />}
             <span className="truncate font-medium">{conn.data?.device_name ?? "Remote session"}</span>
             {conn.data && <ProtocolBadge protocol={conn.data.protocol} />}
+            {recording && (
+              <span className="inline-flex items-center gap-1 rounded bg-danger/15 px-1.5 py-0.5 text-[10px] font-semibold text-danger" title="This session is being recorded">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" /> REC
+              </span>
+            )}
           </>
         }
         connected={phase === "connected"}

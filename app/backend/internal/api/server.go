@@ -141,6 +141,10 @@ func (s *Server) Background(ctx context.Context) {
 	audit := time.NewTicker(6 * time.Hour)
 	defer audit.Stop()
 	s.pruneAudit(ctx)
+	s.finishStaleRecordings(ctx)
+	s.pruneRecordings(ctx)
+	recs := time.NewTicker(time.Hour)
+	defer recs.Stop()
 	go s.updateLoop(ctx)
 	for {
 		select {
@@ -153,6 +157,8 @@ func (s *Server) Background(ctx context.Context) {
 			s.quick.sweep()
 		case <-audit.C:
 			s.pruneAudit(ctx)
+		case <-recs.C:
+			s.pruneRecordings(ctx)
 		case <-t.C:
 			if n, err := s.store.DeleteExpiredSessions(ctx, s.limits().Idle, s.limits().RememberIdle); err != nil {
 				slog.Warn("session cleanup failed", "error", err)
@@ -329,6 +335,12 @@ func (s *Server) Handler() http.Handler {
 	a("DELETE /api/settings/targets", s.adminOnly(s.handleResetTargetNetworks))
 	a("GET /api/settings/sessions", s.adminOnly(s.handleGetSessionLimits))
 	a("PUT /api/settings/sessions", s.adminOnly(s.handleSetSessionLimits))
+
+	a("GET /api/settings/recording", s.adminOnly(s.handleGetRecordingSettings))
+	a("PUT /api/settings/recording", s.adminOnly(s.handleSetRecordingSettings))
+	a("GET /api/recordings", s.handleListRecordings)
+	a("GET /api/recordings/{id}/file", s.handleRecordingFile)
+	a("DELETE /api/recordings/{id}", s.adminOnly(s.handleDeleteRecording))
 
 	a("GET /api/statistics", s.handleStatistics)
 	a("GET /api/audit", s.handleListAudit)
@@ -631,6 +643,7 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 		"max_upload_mb":           s.cfg.MaxUploadBytes >> 20,
 		"transfer_drive":          s.drive != nil,
 		"jump_enabled":            s.jumpEnabled(),
+		"recording_enabled":       s.recordingConfig(r.Context()).Enabled,
 		"update_check":            s.cfg.UpdateCheck,
 		"sponsor":                 !s.cfg.HideSponsor,
 		"github_stars":            s.stars.Load(),

@@ -5,6 +5,7 @@
 #   tests/stack.sh up         start both (generates secrets in $STACK_DIR)
 #   tests/stack.sh smoke      run tests/e2e/smoke.mjs against it (the first run also creates the administrator)
 #   tests/stack.sh browser    run tests/e2e/browser.mjs (Chromium via Playwright; takes about half an hour)
+#   tests/stack.sh recording   run tests/e2e/recording.mjs (records an SSH session and plays it back)
 #   tests/stack.sh down       remove everything, including its data
 #
 # Needs Docker. Node and Playwright run in containers. LAN_IP is this machine's address (default: first one).
@@ -52,6 +53,9 @@ browser)
   cp tests/e2e/browser.mjs "$P/pw/"; rm -rf "$P/shots"
   timeout 2700 docker run --rm --ipc=host -v "$P/pw:/w" -v "$P:/s" -w /w -e EMREMOTE_URL="https://$IP:8443" -e ADMIN_USER=admin -e ADMIN_PASSWORD="$(cat "$P/admin_pw")" -e TARGET_HOST="$IP" -e TARGET_PASSWORD="$(cat "$P/target_pw")" -e CA_SPKI="$(cat "$P/spki")" -e SHOTS=/s/shots mcr.microsoft.com/playwright:v1.48.2-noble node browser.mjs > "$P/br.log" 2>&1
   echo "passed: $(grep -cE '^PASS' "$P/br.log")"; grep -E "FAIL|passed|failed|Error|at /w|${2:-NOMATCH}" "$P/br.log" | head -20 ;;
+recording)
+  cp tests/e2e/recording.mjs "$P/pw/"; mkdir -p "$P/shots"
+  docker run --rm --ipc=host -v "$P/pw:/w" -v "$P:/s" -w /w -e EMREMOTE_URL="https://$IP:8443" -e ADMIN_PASSWORD="$(cat "$P/admin_pw")" -e TARGET_HOST="$IP" -e TARGET_PASSWORD="$(cat "$P/target_pw")" -e CA_SPKI="$(cat "$P/spki")" mcr.microsoft.com/playwright:v1.48.2-noble node recording.mjs 2>&1 | grep -E "FAIL|passed" ;;
 down)
   docker rm -f emremote-fakeswitch >/dev/null 2>&1
   $E down 2>&1 | tail -1; TARGET_PASSWORD=x docker compose -f tests/targets/compose.yaml down --rmi local 2>&1 | tail -1

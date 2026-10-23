@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.14 (2026-10-23)
+
+- **Session recording** (Settings > Session recording, off by default): record the screen of SSH, Telnet, RDP and VNC sessions
+  and play them back in the browser under **Recordings** (seek, pause, raw download). Choose to record every connection or
+  only chosen devices, which protocols, per-device exceptions ("always" or "never"), how long to keep recordings and a size
+  limit. Recorded sessions show a REC mark in the toolbar. The keyboard is never recorded. Recordings are stored in a Docker
+  volume (`recordings`) or, with three values in `.env`, on an NFS or SMB share (docs/RECORDING.md). Administrators see
+  everything; everyone else sees only their own recordings. Viewing and deleting are in the activity log.
+- **Add device dialog** is wider and roomier; the location is a full-width section with search, labelled latitude and
+  longitude fields and an always visible map.
+- **Tags** open a dropdown of the existing tags (filtered as you type, keyboard friendly).
+- **Device page:** Details sit under Connection methods (no empty right column); Wake, Quick view, Connect and Edit device
+  are the same color, size and shape.
+- **Terminal themes:** 27 themes (Monokai, Gruvbox, Tokyo Night, Catppuccin, GitHub, Material, Rosé Pine, Everforest,
+  Night Owl, Ayu, Zenburn, Tango, Amber, Paper and more). The Settings preview now shows what a real session does: the
+  prompt and typed commands use the theme's text color, and the 16 colors appear where remote programs use them.
+
 ## 0.1.13 (2026-10-22)
 
 - **A device in several groups:** a device can belong to more than one group (the first is its main group). Every group

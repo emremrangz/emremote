@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer, Globe } from "lucide-react";
+import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer, Globe, Video, X } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader, Badge, ErrorState } from "@/components/ui/misc";
 import { Button } from "@/components/ui/Button";
@@ -10,14 +10,16 @@ import { TERMINAL_FONTS, TERMINAL_THEMES, DEFAULT_SSH } from "@/lib/constants";
 import { loadTerminalPrefs, saveTerminalPrefs, type TerminalPrefs } from "@/lib/terminalPrefs";
 import { PageLoader } from "@/components/ui/Spinner";
 import { TwoFactorCard } from "@/components/TwoFactorCard";
-import { useActiveSessions, useLoginSessions, useSystem, keys } from "@/hooks/queries";
+import { useActiveSessions, useDevices, useLoginSessions, useSystem, keys } from "@/hooks/queries";
 import { ApiError, del, errorMessage, get, post, put } from "@/lib/api";
 import { useAuth, useAccess } from "@/lib/auth";
 import { useTheme, type ThemePref } from "@/lib/theme";
-import { dateTime, duration, relativeTime } from "@/lib/format";
+import { bytes, dateTime, duration, relativeTime } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProtocolBadge } from "@/components/Status";
+import { Switch } from "@/components/ui/Field";
+import type { RecordingConfig, RecordingStorage } from "@/lib/types";
 
 function Card({ title, description, children, icon, id }: { title: string; description?: ReactNode; children: ReactNode; icon?: ReactNode; id?: string }) {
   return (
@@ -120,22 +122,190 @@ function TerminalCard() {
             aria-label={`Terminal preview, ${theme.label}`}
           >
             <pre className="m-0 min-h-[260px] overflow-hidden whitespace-pre-wrap break-words p-3" style={{ font: "inherit" }}>
-              <span style={{ color: green }}>tester@lab-ws</span>:<span style={{ color: blue }}>~</span>$ ls -l{"\n"}
+              tester@lab-ws:~$ ls -l{"\n"}
               <span style={dim}>total 12</span>
               {"\n"}drwxr-xr-x 2 tester tester 4096 Oct 14 09:12 <span style={{ color: blue }}>projects</span>
               {"\n"}-rwxr-xr-x 1 tester tester  812 Oct 13 18:40 <span style={{ color: green }}>backup.sh</span>
               {"\n"}-rw-r--r-- 1 tester tester 1.2K Oct 14 08:03 notes.txt{"\n"}
-              <span style={{ color: green }}>tester@lab-ws</span>:<span style={{ color: blue }}>~</span>$ systemctl status sshd{"\n"}
-              <span style={{ color: green }}>●</span> sshd.service - OpenBSD Secure Shell server{"\n"}
-              {"   "}Active: <span style={{ color: green }}>active (running)</span> since Tue 2026-10-14{"\n"}
-              <span style={{ color: green }}>tester@lab-ws</span>:<span style={{ color: blue }}>~</span>$ tail error.log{"\n"}
+              tester@lab-ws:~$ grep -i -E "warn|error" app.log{"\n"}
               <span style={{ color: yellow }}>WARN</span>  disk usage at 87%{"\n"}
               <span style={{ color: red }}>ERROR</span> backup job failed (exit 1){"\n"}
-              <span style={{ color: green }}>tester@lab-ws</span>:<span style={{ color: blue }}>~</span>$ <span className="inline-block h-[1.1em] w-[0.6em] translate-y-[0.2em] animate-pulse" style={{ background: theme.fg }} />
+              tester@lab-ws:~$ <span className="inline-block h-[1.1em] w-[0.6em] translate-y-[0.2em] animate-pulse" style={{ background: theme.fg }} />
             </pre>
+            <div className="flex" aria-label="The 16 terminal colors">
+              {theme.ansi.map((c, i) => (
+                <span key={i} className="h-3 flex-1" style={{ background: c }} />
+              ))}
+            </div>
           </div>
+          <p className="mt-2 text-xs text-subtle">
+            The prompt and the commands you type use the theme's text color. The other colors, shown in the strip, appear where programs on the remote computer ask for them (ls --color, grep, git, htop).
+          </p>
         </div>
       </div>
+    </Card>
+  );
+}
+
+const RECORDING_PROTOCOLS = ["ssh", "rdp", "vnc", "telnet"];
+const STORAGE_LABEL = { volume: "Docker volume (or a local disk)", nfs: "NFS share", smb: "SMB share" } as const;
+
+/** Screen recording of remote sessions (administrators): what is recorded, for how long, and where it is kept. */
+function RecordingCard() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const devices = useDevices();
+  const [cfg, setCfg] = useState<RecordingConfig | null>(null);
+  const [storage, setStorage] = useState<RecordingStorage | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [pick, setPick] = useState("");
+  useEffect(() => {
+    get<{ config: RecordingConfig; storage: RecordingStorage }>("/api/settings/recording")
+      .then((r) => {
+        setCfg(r.config);
+        setStorage(r.storage);
+      })
+      .catch((e) => setError(errorMessage(e)));
+  }, []);
+  const save = async () => {
+    if (!cfg) return;
+    setBusy(true);
+    setError("");
+    try {
+      // Exceptions of devices that no longer exist are dropped.
+      const known = new Set((devices.data ?? []).map((d) => d.id));
+      const kept = devices.data ? Object.fromEntries(Object.entries(cfg.devices).filter(([id]) => known.has(id))) : cfg.devices;
+      const r = await put<{ config: RecordingConfig; storage: RecordingStorage }>("/api/settings/recording", { ...cfg, devices: kept });
+      setCfg(r.config);
+      setStorage(r.storage);
+      qc.invalidateQueries({ queryKey: keys.system });
+      toast.success("Recording settings saved.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const nameOf = (id: string) => devices.data?.find((d) => d.id === id)?.name ?? "Removed device";
+  const exceptions = cfg ? Object.entries(cfg.devices) : [];
+  const toggleProtocol = (p: string, on: boolean) => cfg && setCfg({ ...cfg, protocols: on ? [...cfg.protocols, p] : cfg.protocols.filter((x) => x !== p) });
+  return (
+    <Card
+      title="Session recording"
+      description="Record the screen of remote sessions and play them back under Recordings. The keyboard is never recorded."
+      icon={<Video className="h-4 w-4" />}
+    >
+      {!cfg ? (
+        <p className="text-sm text-muted">{error || "Loading…"}</p>
+      ) : (
+        <div className="space-y-5">
+          <Switch
+            checked={cfg.enabled}
+            onChange={(v) => setCfg({ ...cfg, enabled: v })}
+            label="Record remote sessions"
+            description="Sessions started after you save are recorded, and show a REC mark in the toolbar. What the screen shows is recorded, including anything the remote computer displays."
+          />
+          <fieldset disabled={!cfg.enabled} className={clsx("space-y-4", !cfg.enabled && "opacity-60")}>
+            <div role="radiogroup" aria-label="What to record" className="grid gap-2 sm:grid-cols-2">
+              {[
+                [true, "Every connection", "All devices are recorded; pick exceptions below."],
+                [false, "Only chosen devices", "Nothing is recorded unless you add the device below."],
+              ].map(([v, t, d]) => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  role="radio"
+                  aria-checked={cfg.record_all === v}
+                  onClick={() => setCfg({ ...cfg, record_all: v as boolean })}
+                  className={clsx("rounded-lg border px-3 py-2.5 text-left text-sm", cfg.record_all === v ? "border-fg/70 bg-surface-2 ring-1 ring-fg/40" : "border-border text-muted hover:border-border-strong")}
+                >
+                  <span className="block font-medium text-fg">{t as string}</span>
+                  <span className="block text-xs text-subtle">{d as string}</span>
+                </button>
+              ))}
+            </div>
+            <div>
+              <p className="label">Protocols recorded by default</p>
+              <div className="flex flex-wrap gap-4">
+                {RECORDING_PROTOCOLS.map((p) => (
+                  <label key={p} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={cfg.protocols.includes(p)} onChange={(e) => toggleProtocol(p, e.target.checked)} />
+                    {p.toUpperCase()}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Keep recordings for" hint="Older recordings are deleted automatically.">
+                <Select className="input" value={String(cfg.retention_days)} onChange={(e) => setCfg({ ...cfg, retention_days: Number(e.target.value) })}>
+                  {[[7, "7 days"], [14, "14 days"], [30, "30 days"], [90, "90 days"], [180, "180 days"], [365, "1 year"], [0, "Forever"]].concat(
+                    [7, 14, 30, 90, 180, 365, 0].includes(cfg.retention_days) ? [] : [[cfg.retention_days, `${cfg.retention_days} days`]],
+                  ).map(([n, l]) => (
+                    <option key={n} value={n}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Size limit (GB)" hint="0 means no limit. When exceeded, the oldest recordings go first.">
+                <input className="input" type="number" min={0} max={100000} value={cfg.max_gb} onChange={(e) => setCfg({ ...cfg, max_gb: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+              </Field>
+            </div>
+            <div>
+              <p className="label">Exceptions per device</p>
+              {exceptions.length > 0 && (
+                <ul className="mb-2 divide-y divide-border rounded-lg border border-border">
+                  {exceptions.map(([id, mode]) => (
+                    <li key={id} className="flex items-center gap-2 px-3 py-2 text-sm">
+                      <span className="min-w-0 flex-1 truncate">{nameOf(id)}</span>
+                      <Select className="input h-8 w-40" value={mode} aria-label={`Recording for ${nameOf(id)}`} onChange={(e) => setCfg({ ...cfg, devices: { ...cfg.devices, [id]: e.target.value as "on" | "off" } })}>
+                        <option value="on">Always record</option>
+                        <option value="off">Never record</option>
+                      </Select>
+                      <button type="button" className="rounded p-1 text-muted hover:bg-surface-3 hover:text-fg" aria-label={`Remove the exception for ${nameOf(id)}`} onClick={() => { const { [id]: _drop, ...rest } = cfg.devices; void _drop; setCfg({ ...cfg, devices: rest }); }}>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Select
+                className="input"
+                value={pick}
+                aria-label="Add a device exception"
+                onChange={(e) => {
+                  setPick("");
+                  if (e.target.value) setCfg({ ...cfg, devices: { ...cfg.devices, [e.target.value]: cfg.record_all ? "off" : "on" } });
+                }}
+              >
+                <option value="">Add a device…</option>
+                {(devices.data ?? []).filter((d) => !(d.id in cfg.devices)).map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </fieldset>
+          {storage && (
+            <div className="rounded-lg border border-border bg-surface-2/40 px-4 py-3 text-[13px]">
+              <p className="font-medium">Storage: {STORAGE_LABEL[storage.kind]}</p>
+              <p className="mt-1 text-muted">
+                {storage.writable ? "Writable" : <span className="text-danger">Not writable. Recording cannot start until this is fixed.</span>}
+                {storage.total_bytes > 0 && `. ${bytes(storage.free_bytes)} free of ${bytes(storage.total_bytes)}`}. {storage.count} recording{storage.count === 1 ? "" : "s"}, {bytes(storage.used_bytes)}.
+              </p>
+              <p className="mt-1 text-xs text-subtle">
+                Recordings live in {storage.path}. To keep them on an NFS or SMB share instead, set the EMREMOTE_RECORDINGS_* values in .env (see docs/RECORDING.md).
+              </p>
+            </div>
+          )}
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <Button variant="primary" onClick={save} loading={busy}>
+            Save
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }
@@ -653,6 +823,7 @@ export default function SettingsPage() {
         {isAdmin && <TargetNetworksCard />}
         {isAdmin && <JumpHostCard />}
         {isAdmin && <SessionLimitsCard />}
+        {isAdmin && <RecordingCard />}
         <PasswordCard />
         <Card title="Two-factor authentication" description="Protects your account even if your password leaks." icon={<ShieldCheck className="h-4 w-4" />}>
           <TwoFactorCard />

@@ -25,10 +25,11 @@ services:
     image: guacamole/guacd:1.6.0
     user: "0:0"
     # Idempotent: after the first run the folder already belongs to uid 1000.
-    entrypoint: ["sh", "-c", "for d in /transfer /state; do [ \"$$(stat -c %u $$d)\" = 1000 ] || { chmod 0750 $$d && chown 1000:1000 $$d; }; done"]
+    entrypoint: ["sh", "-c", "for d in /transfer /state; do [ \"$$(stat -c %u $$d)\" = 1000 ] || { chmod 0750 $$d && chown 1000:1000 $$d; }; done; [ \"$$(stat -c %u /recordings)\" = 1000 ] || { chmod 0750 /recordings && chown 1000:1000 /recordings; } 2>/dev/null || true"]
     volumes:
       - ${EMREMOTE_DATA_DIR:-./data}/transfer:/transfer
       - state:/state
+      - recordings:/recordings
     network_mode: none
     healthcheck:
       disable: true
@@ -71,7 +72,7 @@ services:
     build:
       context: ./app
       args:
-        EMREMOTE_VERSION: ${EMREMOTE_VERSION:-0.1.13}
+        EMREMOTE_VERSION: ${EMREMOTE_VERSION:-0.1.14}
     # Pulled from the registry by default ("docker compose pull"); "docker compose build" builds it locally instead.
     image: ghcr.io/emremrangz/emremote:${EMREMOTE_IMAGE_TAG:-latest}
     # Same uid as guacd, so both can manage files in the RDP transfer drive.
@@ -111,10 +112,13 @@ services:
       EMREMOTE_AUDIT_MAX_ENTRIES: ${EMREMOTE_AUDIT_MAX_ENTRIES:-1000000}
       EMREMOTE_ALLOW_EMPTY_DATABASE: ${EMREMOTE_ALLOW_EMPTY_DATABASE:-false}
       EMREMOTE_STATE_DIR: /state
+      EMREMOTE_RECORDINGS_DIR: /recordings
     volumes:
       - ${EMREMOTE_DATA_DIR:-./data}/transfer:/transfer
       # A small marker that tells "the database is new" from "the database was lost".
       - state:/state
+      # Screen recordings, written by guacd and played back by the application.
+      - recordings:/recordings
     read_only: true
     tmpfs:
       - /tmp
@@ -136,6 +140,7 @@ services:
     volumes:
       # RDP transfer drive (appears as "emremote" inside Windows sessions)
       - ${EMREMOTE_DATA_DIR:-./data}/transfer:/transfer
+      - recordings:/recordings
     read_only: true
     tmpfs:
       - /tmp
@@ -209,6 +214,13 @@ services:
 
 volumes:
   state:
+  # Session recordings. A plain Docker volume by default; set the EMREMOTE_RECORDINGS_* values in .env to keep them
+  # on an NFS or SMB share instead (see docs/RECORDING.md). Empty values mean a normal local volume.
+  recordings:
+    driver_opts:
+      type: ${EMREMOTE_RECORDINGS_TYPE:-}
+      o: ${EMREMOTE_RECORDINGS_OPTIONS:-}
+      device: ${EMREMOTE_RECORDINGS_DEVICE:-}
 
 networks:
   # Browser-facing: reverse proxy <-> application.

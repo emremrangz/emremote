@@ -119,7 +119,7 @@ Without it the window shows the command to run on the server instead. Details an
 
 ## Documentation
 
-[Deployment](docs/DEPLOYMENT.md) · [Connections](docs/CONNECTIONS.md) · [Users](docs/USERS.md) ·
+[Deployment](docs/DEPLOYMENT.md) · [Connections](docs/CONNECTIONS.md) · [Session recording](docs/RECORDING.md) · [Users](docs/USERS.md) ·
 [Security](docs/SECURITY.md) · [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) ·
 [Troubleshooting](docs/TROUBLESHOOTING.md) · [Limitations](docs/LIMITATIONS.md)
 

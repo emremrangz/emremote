@@ -307,7 +307,7 @@ session never starts).
 ## Terminal appearance (SSH and Telnet)
 
 The palette button in the session toolbar changes the color theme (Gray, White, Green and Black on
-white, Solarized Dark and Light, Dracula, Nord, One Dark, Tomorrow Night), the font (DejaVu Sans Mono,
+white, Solarized, Dracula, Nord, One Dark, Tomorrow Night, Monokai, Gruvbox, Tokyo Night, Catppuccin, GitHub and more, 27 in all), the font (DejaVu Sans Mono,
 Liberation Mono or Terminus, the monospace fonts installed in the gateway) and the text size. The
 session reconnects, because the gateway draws the terminal. The choice is saved in your browser and
 applies to all your SSH and Telnet sessions, including shared connections you cannot edit. A

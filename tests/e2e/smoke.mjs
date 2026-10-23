@@ -730,6 +730,53 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   check("deleting a user deletes their snippets", true);
 }
 
+// ---- Session recording: off by default, per-device choice, own recordings only, no keystrokes ----
+{
+  const stamp4 = Date.now().toString(36);
+  const dr = await c.post("/api/devices", { name: `rec-smoke-${stamp4}`, hostname: "", address: TARGET_HOST, os: "linux", device_type: "server", description: "", notes: "", tags: [], group_ids: [], favorite: false });
+  const cr = await c.post(`/api/devices/${dr.data.id}/connections`, { name: "SSH", protocol: "ssh", port: 12222, username: "tester", domain: "", credential_id: null, settings: {}, secret: { mode: "set", password: TARGET_PASSWORD } });
+  const cfg0 = (await c.get("/api/settings/recording")).data;
+  check("recording is off until an administrator turns it on", cfg0.config.enabled === false && cfg0.storage.writable === true);
+  const off = await openSession(c, cr.data.id, { seconds: 4 });
+  check("a session while recording is off is not recorded", off.error === undefined && (await c.get("/api/recordings")).data.total === 0);
+  const bad = await c.put("/api/settings/recording", { ...cfg0.config, enabled: true, devices: { "not-an-id": "on" } });
+  const bad2 = await c.put("/api/settings/recording", { ...cfg0.config, enabled: true, protocols: ["ftp"] });
+  check("recording settings are validated", bad.status === 422 && bad2.status === 422, `${bad.status},${bad2.status}`);
+  const on = await c.put("/api/settings/recording", { ...cfg0.config, enabled: true, record_all: true });
+  check("turn recording on", on.status === 200 && on.data.config.enabled === true);
+  const t = await c.post(`/api/connections/${cr.data.id}/sessions`, { width: 800, height: 600, dpi: 96, image: ["image/png"], audio: [], video: [], timezone: "" });
+  check("the session ticket says the session is recorded", t.status === 201 && t.data.recording === true);
+  const rec = await openSession(c, cr.data.id, { seconds: 5 });
+  await new Promise((r) => setTimeout(r, 1500));
+  const list = (await c.get("/api/recordings")).data;
+  check("a recorded session is listed with its size", rec.error === undefined && list.total === 1 && list.items[0].ended_at && list.items[0].size_bytes > 200 && list.items[0].device_name.startsWith("rec-smoke"), JSON.stringify(list.items[0] ?? {}));
+  const file = await fetch(BASE + `/api/recordings/${list.items[0]?.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } });
+  const body = await file.text();
+  check("the recording file is the gateway's stream and has no keyboard events", file.status === 200 && body.includes("sync,") && !/\d+\.key,/.test(body));
+  const memberName = `rec-m-${stamp4}`;
+  await c.post("/api/users", { username: memberName, password: `Rec-${stamp4}-pw1x`, role: "member", team_id: null, permissions: ["sessions.connect"], inventory_mode: "none", device_ids: [], group_ids: [] });
+  const mm = new Client();
+  const lr = await mm.post("/api/auth/login", { username: memberName, password: `Rec-${stamp4}-pw1x` });
+  mm.csrf = lr.data?.csrf_token ?? "";
+  check("a member sees none of other people's recordings", (await mm.get("/api/recordings")).data.total === 0 && (await mm.get(`/api/recordings/${list.items[0].id}/file`)).status === 404);
+  check("a member cannot read or change recording settings or delete recordings", (await mm.get("/api/settings/recording")).status === 403 && (await mm.put("/api/settings/recording", cfg0.config)).status === 403 && (await mm.del(`/api/recordings/${list.items[0].id}`)).status === 403);
+  const none = await c.put("/api/settings/recording", { ...cfg0.config, enabled: true, record_all: true, devices: { [dr.data.id]: "off" } });
+  await openSession(c, cr.data.id, { seconds: 4 });
+  check("a device set to never record is skipped", none.status === 200 && (await c.get("/api/recordings")).data.total === 1);
+  const only = await c.put("/api/settings/recording", { ...cfg0.config, enabled: true, record_all: false, devices: { [dr.data.id]: "on" } });
+  await openSession(c, cr.data.id, { seconds: 4 });
+  await new Promise((r) => setTimeout(r, 1500));
+  check("a device set to always record is recorded when only chosen devices are", only.status === 200 && (await c.get("/api/recordings")).data.total === 2);
+  const del2 = await c.del(`/api/recordings/${list.items[0].id}`);
+  check("an administrator deletes a recording", del2.status === 204 && (await c.get("/api/recordings")).data.total === 1);
+  const log = (await c.get("/api/audit?limit=50&action=recording.")).data;
+  check("viewing and deleting recordings are in the activity log", JSON.stringify(log).includes("recording.view") && JSON.stringify(log).includes("recording.delete"));
+  for (const r of (await c.get("/api/recordings")).data.items) await c.del(`/api/recordings/${r.id}`);
+  await c.put("/api/settings/recording", { ...cfg0.config, enabled: false });
+  await c.del(`/api/devices/${dr.data.id}`);
+  for (const u of (await c.get("/api/users")).data) if (u.username.endsWith(stamp4)) await c.del(`/api/users/${u.id}?keep_inventory=false`);
+}
+
 // ---- Two-factor authentication ----
 {
   const tag = Date.now().toString(36);

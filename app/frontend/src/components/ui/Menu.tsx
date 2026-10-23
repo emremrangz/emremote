@@ -11,7 +11,7 @@ export function MenuContent({ children, align = "end" }: { children: ReactNode; 
       <DM.Content
         align={align}
         sideOffset={6}
-        className="z-50 min-w-[190px] rounded-lg border border-border bg-surface p-1 shadow-pop animate-scale-in"
+        className="z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-[190px] overflow-y-auto rounded-lg border border-border bg-surface p-1 shadow-pop animate-scale-in"
       >
         {children}
       </DM.Content>

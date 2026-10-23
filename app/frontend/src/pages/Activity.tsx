@@ -17,6 +17,7 @@ const categories = [
   { value: "auth.", label: "Authentication" },
   { value: "session.", label: "Remote sessions" },
   { value: "file.", label: "File transfers" },
+  { value: "recording.", label: "Recordings" },
   { value: "device.", label: "Devices" },
   { value: "connection.", label: "Connections" },
   { value: "credential.", label: "Credentials" },

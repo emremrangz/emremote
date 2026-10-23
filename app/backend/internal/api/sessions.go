@@ -42,6 +42,8 @@ type ticket struct {
 	// forwarder carries the session through a jump host (nil for direct targets).
 	forwarder *jump.Forwarder
 	jumpName  string
+	// recording is set when the gateway records this session.
+	recording *recordingPlan
 }
 
 type ticketStore struct {
@@ -103,6 +105,7 @@ type ActiveSession struct {
 	// Viewers is how many people are watching through a share link.
 	Viewers   int  `json:"viewers"`
 	Shared    bool `json:"shared"`
+	Recording bool `json:"recording"`
 	sessionID string
 	cancel    context.CancelFunc
 	// guacdID is the gateway's id for this connection, which watchers join.
@@ -384,6 +387,7 @@ func (s *Server) issueTicket(w http.ResponseWriter, r *http.Request, req session
 		writeStoreError(w, r, err, "Connection")
 		return
 	}
+	rec := s.planRecording(r.Context(), c.Protocol, c.DeviceID, values)
 	image := filterMimes(req.Image, func(m string) bool { return imageMimes[m] }, 3)
 	if len(image) == 0 {
 		image = []string{"image/png", "image/jpeg"}
@@ -395,6 +399,7 @@ func (s *Server) issueTicket(w http.ResponseWriter, r *http.Request, req session
 		target:    joinHostPort(tgt.Addr, tgt.Port),
 		forwarder: fwd,
 		jumpName:  jumpName,
+		recording: rec,
 		expires:   time.Now().Add(ticketTTL),
 		clientIP:  s.clientIP(r),
 		params: guac.HandshakeParams{
@@ -418,6 +423,7 @@ func (s *Server) issueTicket(w http.ResponseWriter, r *http.Request, req session
 		// Tells the client whether guacd may prompt for missing credentials.
 		"has_password": material.Password != "" || material.PrivateKey != "",
 		"username":     username,
+		"recording":    rec != nil,
 	})
 }
 
@@ -482,7 +488,7 @@ func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 	active := &ActiveSession{
 		ID: auth.RandomToken(12), UserID: tk.user.ID, ConnectionID: c.ID, ConnectionName: c.Name, DeviceID: c.DeviceID,
 		DeviceName: c.DeviceName, Protocol: c.Protocol, Username: tk.user.Username, ClientIP: tk.clientIP,
-		StartedAt: time.Now(), sessionID: tk.sessionID, cancel: cancel, guacdID: guacdID, viewerCancels: map[int]context.CancelFunc{},
+		StartedAt: time.Now(), Recording: tk.recording != nil, sessionID: tk.sessionID, cancel: cancel, guacdID: guacdID, viewerCancels: map[int]context.CancelFunc{},
 	}
 	s.tunnels.add(active)
 	defer s.tunnels.remove(active.ID)
@@ -490,6 +496,11 @@ func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 
 	if c.DeviceID != "" {
 		_ = s.store.TouchConnectionUsed(r.Context(), tk.user.ID, c.ID, c.DeviceID)
+	}
+	if tk.recording != nil {
+		s.beginRecording(r.Context(), tk.recording, active, active.StartedAt)
+		defer s.endRecording(tk.recording)
+		baseDetails["recording_id"] = tk.recording.id
 	}
 	s.audit(r, "session.start", "connection", c.ID, targetName, true, merge(baseDetails, map[string]any{
 		"session_id": active.ID, "gateway_connection_id": guacdID,

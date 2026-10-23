@@ -18,6 +18,7 @@ import TransferPage from "./pages/Transfer";
 import StatisticsPage from "./pages/Statistics";
 import DataMissingPage from "./pages/DataMissing";
 import UsersPage from "./pages/Users";
+import RecordingsPage from "./pages/Recordings";
 
 /** Sends people without the right back to Overview instead of showing a broken page. */
 function Require({ admin, perm, children }: { admin?: boolean; perm?: Permission; children: ReactNode }) {
@@ -73,6 +74,7 @@ export default function App() {
         <Route path="transfer" element={<Require perm="files.use"><TransferPage /></Require>} />
         <Route path="connections" element={<ConnectionsPage />} />
         <Route path="credentials" element={<CredentialsPage />} />
+        <Route path="recordings" element={<RecordingsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

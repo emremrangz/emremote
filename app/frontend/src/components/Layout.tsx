@@ -11,6 +11,7 @@ import {
   BarChart3,
   KeyRound,
   ScrollText,
+  Video,
   Settings,
   LogOut,
   Menu as MenuIcon,
@@ -192,6 +193,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: 
 
         <Section title={isAdmin ? "Administration" : "Account"}>
           {isAdmin && <NavItem to="/users" icon={Users} label="Users" onNavigate={onNavigate} />}
+          {(isAdmin || system.data?.recording_enabled) && <NavItem to="/recordings" icon={Video} label="Recordings" onNavigate={onNavigate} />}
           <NavItem to="/activity" icon={ScrollText} label={isAdmin ? "Activity log" : "My activity"} onNavigate={onNavigate} />
           <NavItem to="/settings" icon={Settings} label="Settings" onNavigate={onNavigate} />
         </Section>

@@ -333,7 +333,7 @@ export function DeviceFormDialog({
       onOpenChange={onOpenChange}
       title={editing ? "Edit device" : cloning ? "Clone device" : "Add device"}
       description={editing ? device!.name : cloning ? `From ${cloneFrom!.name}` : <Steps step={step} />}
-      size="xl"
+      size="2xl"
       footer={
         <>
           {formError && <p className="mr-auto max-w-[55%] text-sm text-danger">{formError}</p>}
@@ -352,7 +352,7 @@ export function DeviceFormDialog({
         </>
       }
     >
-      <form id="device-form" onSubmit={submit} className="space-y-5" noValidate>
+      <form id="device-form" onSubmit={submit} className="space-y-7" noValidate>
         {step === 0 && (
           <>
             <div>
@@ -377,7 +377,7 @@ export function DeviceFormDialog({
               </div>
             </div>
 
-            <div className="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+            <div className="grid gap-x-6 gap-y-6 sm:grid-cols-2">
               <Field label="Name" error={errors.name}>
                 <input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Office PC" autoFocus maxLength={128} />
               </Field>
@@ -460,7 +460,7 @@ export function DeviceFormDialog({
                   ))}
                 </Select>
               </Field>
-              <Field label="Location" optional hint="Shown on the map on the Overview page.">
+              <Field label="Location" optional hint="Shown on the map on the Overview page." className="sm:col-span-2">
                 <LocationPicker value={loc} onChange={setLoc} error={errors.location} />
               </Field>
             </div>

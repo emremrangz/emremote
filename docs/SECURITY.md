@@ -137,6 +137,15 @@ cosign verify ghcr.io/emremrangz/emremote:0.1.2 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
+## Session recording
+
+Off by default. When an administrator turns it on, the gateway writes the screen (and mouse) of recorded sessions to the
+`recordings` volume; the keyboard is never recorded (`recording-include-keys` stays off), so a password typed at a hidden
+prompt is not captured, but anything the remote computer displays is. Recorded sessions show a REC mark. Recordings are
+readable by administrators and by the person who ran the session; access, download and deletion are in the activity log.
+The files are not encrypted by emremote: protect the volume or share like any other sensitive data (see
+[RECORDING.md](RECORDING.md)). The network share, if any, is mounted by the Docker host, not by emremote.
+
 ## Cloning devices
 
 Cloning copies saved passwords and keys only when the original and the clone have the same owner (shared inventory for
