@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, Play, Trash2, Video } from "lucide-react";
+import { ChevronDown, Download, Play, Trash2, Video } from "lucide-react";
 import { PageHeader, EmptyState, ErrorState } from "@/components/ui/misc";
 import { PageLoader } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
@@ -8,6 +8,9 @@ import { Select } from "@/components/ui/Select";
 import { ProtocolBadge } from "@/components/Status";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { RecordingPlayer } from "@/components/RecordingPlayer";
+import { RecordingExport } from "@/components/RecordingExport";
+import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/Menu";
+import { canExportVideo } from "@/lib/recordingExport";
 import { useToast } from "@/components/ui/Toast";
 import { useAccess } from "@/lib/auth";
 import { del, get } from "@/lib/api";
@@ -24,6 +27,7 @@ export default function RecordingsPage() {
   const [page, setPage] = useState(0);
   const [playing, setPlaying] = useState<Recording | null>(null);
   const [removing, setRemoving] = useState<Recording | null>(null);
+  const [exporting, setExporting] = useState<Recording | null>(null);
   const q = useQuery({
     queryKey: ["recordings", protocol, page],
     queryFn: () => get<{ items: Recording[]; total: number }>(`/api/recordings?limit=${PAGE}&offset=${page * PAGE}${protocol ? `&protocol=${protocol}` : ""}`),
@@ -87,7 +91,17 @@ export default function RecordingsPage() {
                         <Button size="sm" icon={<Play className="h-3.5 w-3.5" />} onClick={() => setPlaying(r)}>
                           Play
                         </Button>
-                        <Button size="icon-sm" icon={<Download className="h-3.5 w-3.5" />} aria-label="Download the recording" title="Download the raw recording" onClick={() => window.location.assign(`/api/recordings/${r.id}/file?download=1`)} />
+                        <Menu>
+                          <MenuTrigger asChild>
+                            <Button size="sm" icon={<Download className="h-3.5 w-3.5" />} aria-label="Download the recording">
+                              <ChevronDown className="h-3 w-3 opacity-70" />
+                            </Button>
+                          </MenuTrigger>
+                          <MenuContent>
+                            {canExportVideo() && r.ended_at && <MenuItem onSelect={() => setExporting(r)}>Video (MP4)</MenuItem>}
+                            <MenuItem onSelect={() => window.location.assign(`/api/recordings/${r.id}/file?download=1`)}>Raw recording (.guac)</MenuItem>
+                          </MenuContent>
+                        </Menu>
                         {isAdmin && r.ended_at && (
                           <Button size="icon-sm" icon={<Trash2 className="h-3.5 w-3.5" />} aria-label="Delete the recording" onClick={() => setRemoving(r)} />
                         )}
@@ -116,6 +130,7 @@ export default function RecordingsPage() {
         )}
       </div>
       <RecordingPlayer recording={playing} onClose={() => setPlaying(null)} />
+      <RecordingExport recording={exporting} onClose={() => setExporting(null)} />
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}

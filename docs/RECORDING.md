@@ -57,5 +57,9 @@ test suite covers (`tests/stack.sh smoke` and `tests/stack.sh recording`).
 ## Playback
 
 Open **Recordings**, choose a session and press play; the slider seeks. Recordings are in the gateway's own format
-(`.guac`); **Download** gives the raw file for use with Apache Guacamole tools (for example `guacenc` makes a video).
+(`.guac`). **Download** offers a **Video (MP4)**: the video is made in your browser tab (the recording is replayed
+and encoded with the browser's video encoder, nothing is sent anywhere), so keep the tab open; a long recording takes a
+while and the picture is capped at 1920 pixels wide. The video uses H.264, or VP9 inside the same MP4 when the browser
+cannot encode H.264. Browsers without a video encoder only offer the raw file (`.guac`, for Apache Guacamole tools such as
+`guacenc`). The MP4 path was tested with VP9 in Chromium; H.264 depends on your browser and was not tested.
 Backups made with `scripts/backup.sh` do not include recordings.

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Recordings download as MP4.** The Download button of a recording offers a video (MP4) made in the browser, besides the
+  raw `.guac` file.
+
 ## 0.1.14 (2026-10-23)
 
 - **Session recording** (Settings > Session recording, off by default): record the screen of SSH, Telnet, RDP and VNC sessions

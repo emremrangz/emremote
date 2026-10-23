@@ -36,6 +36,12 @@ await p.screenshot({ path: "/s/shots/rec-play.png" });
 const cv = await p.evaluate(() => { const els = [...document.querySelectorAll('[role=dialog] canvas')]; let lit = 0; for (const c of els) { try { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 0; i < d.length; i += 4 * 17) if (d[i] + d[i + 1] + d[i + 2] > 120) lit++; } catch {} } return { n: els.length, lit }; });
 chk("player draws the recorded screen", cv.n > 0 && cv.lit > 20);
 await p.keyboard.press("Escape");
+// MP4 download (made in the browser; the test browser can only encode VP9, real browsers use H.264)
+await p.getByRole("button", { name: "Download the recording" }).first().click();
+const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 120000 }), p.getByRole("menuitem", { name: /Video \(MP4\)/ }).click()]);
+await dl.saveAs("/s/shots/recording.mp4");
+chk("video download is an .mp4 file", dl.suggestedFilename().endsWith(".mp4"));
+await p.keyboard.press("Escape");
 // traversal and access
 chk("bad id is 404", (await api("GET", "/api/recordings/..%2f..%2fetc%2fpasswd/file")).status === 404);
 s = await api("GET", "/api/settings/recording");

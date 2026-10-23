@@ -9,5 +9,7 @@ the Apache License, Version 2.0.
 The deployment uses the unmodified Apache Guacamole guacd container image
 (guacamole/guacd), PostgreSQL and Caddy, each under its own license.
 
+The MP4 export bundles mp4-muxer (https://github.com/Vanilagy/mp4-muxer, MIT license).
+
 The world map outlines (app/frontend/src/lib/worldMapData.ts) are generated from Natural Earth
 (https://www.naturalearthdata.com/), which is in the public domain, through the world-atlas package (ISC license).
