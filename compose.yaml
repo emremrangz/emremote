@@ -72,7 +72,7 @@ services:
     build:
       context: ./app
       args:
-        EMREMOTE_VERSION: ${EMREMOTE_VERSION:-0.1.15}
+        EMREMOTE_VERSION: ${EMREMOTE_VERSION:-0.1.16}
     # Pulled from the registry by default ("docker compose pull"); "docker compose build" builds it locally instead.
     image: ghcr.io/emremrangz/emremote:${EMREMOTE_IMAGE_TAG:-latest}
     # Same uid as guacd, so both can manage files in the RDP transfer drive.

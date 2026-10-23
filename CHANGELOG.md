@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.16 (2026-10-24)
+
+- GitHub Actions updated: checkout, setup-go and setup-node v7; Docker setup-qemu, setup-buildx and login v4; metadata v6;
+  build-push v7.
+- Dependency updates: React Query 5.104.5 and typescript-eslint 8.72.
+
 ## 0.1.15 (2026-10-24)
 
 - **Recordings download as MP4.** The Download button of a recording offers a video (MP4) made in the browser, besides the
