@@ -1,9 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.15 (2026-10-24)
 
 - **Recordings download as MP4.** The Download button of a recording offers a video (MP4) made in the browser, besides the
   raw `.guac` file.
+- Dependency updates: golang.org/x/crypto 0.58.0 (with x/sync, x/sys, x/text) and the minor and patch updates of the
+  Radix dialog and dropdown menu, React Query, PostCSS and Vitest.
 
 ## 0.1.14 (2026-10-23)
 
