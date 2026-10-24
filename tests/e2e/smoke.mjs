@@ -772,6 +772,49 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   const log = (await c.get("/api/audit?limit=50&action=recording.")).data;
   check("viewing and deleting recordings are in the activity log", JSON.stringify(log).includes("recording.view") && JSON.stringify(log).includes("recording.delete"));
   for (const r of (await c.get("/api/recordings")).data.items) await c.del(`/api/recordings/${r.id}`);
+  // ---- recordings on a network share (SMB and NFS), copied by the application ----
+  const waitFor = async (fn, ms = 120000) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, 3000)); } return null; };
+  const baseCfg = { ...cfg0.config, enabled: true, record_all: true, devices: {} };
+  const smb = { kind: "smb", host: TARGET_HOST, share: "recordings", dir: "emremote-smoke", username: "rec", domain: "", uid: 1000, gid: 1000, keep_local: false, password: TARGET_PASSWORD };
+  const nfsT = { kind: "nfs", host: TARGET_HOST, share: "/srv/nfs", dir: "emremote-smoke", username: "", domain: "", uid: 1000, gid: 1000, keep_local: false };
+  const wrongPw = await c.put("/api/settings/recording", { ...baseCfg, storage: { ...smb, password: "not-the-password" } });
+  check("a wrong share password is refused when saving", wrongPw.status === 422 && wrongPw.data?.error?.code === "share_unavailable" && !JSON.stringify(wrongPw.data).includes(TARGET_PASSWORD), `${wrongPw.status} ${wrongPw.data?.error?.message}`);
+  const outside = await c.put("/api/settings/recording", { ...baseCfg, storage: { ...smb, host: "8.8.8.8" } });
+  check("a share outside the allowed target networks is refused", outside.status === 422, `${outside.status} ${outside.data?.error?.message}`);
+  const badDir = await c.put("/api/settings/recording", { ...baseCfg, storage: { ...smb, dir: "../x" } });
+  check("a share folder with path parts is refused", badDir.status === 422);
+  const tst = await c.post("/api/settings/recording/test", { ...baseCfg, storage: smb });
+  check("test connection to the SMB share", tst.status === 200 && tst.data.ok === true, JSON.stringify(tst.data));
+  const smbSave = await c.put("/api/settings/recording", { ...baseCfg, storage: smb });
+  check("save the SMB share; the password is never returned", smbSave.status === 200 && smbSave.data.config.storage.kind === "smb" && smbSave.data.config.storage.has_password === true && !JSON.stringify(smbSave.data).includes(TARGET_PASSWORD) && smbSave.data.storage.share?.reachable === true, JSON.stringify(smbSave.data.storage?.share));
+  const afterSmb = await c.put("/api/settings/recording", { ...baseCfg, storage: { ...smb, password: "" } });
+  check("saving without a password keeps the saved one", afterSmb.status === 200 && afterSmb.data.config.storage.has_password === true);
+  await openSession(c, cr.data.id, { seconds: 4 });
+  const onSmb = await waitFor(async () => (await c.get("/api/recordings")).data.items.find((x) => x.location === "remote"));
+  check("a finished recording is copied to the SMB share and removed from this server", !!onSmb, JSON.stringify((await c.get("/api/recordings")).data.items.map((x) => x.location)));
+  if (onSmb) {
+    const f2 = await fetch(BASE + `/api/recordings/${onSmb.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } });
+    const t2 = await f2.text();
+    check("the recording plays from the SMB share", f2.status === 200 && t2.includes("sync,") && t2.length === onSmb.size_bytes, `${f2.status} ${t2.length} vs ${onSmb.size_bytes}`);
+    check("deleting a recording removes it from the SMB share", (await c.del(`/api/recordings/${onSmb.id}`)).status === 204 && (await fetch(BASE + `/api/recordings/${onSmb.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } })).status === 404);
+  }
+  const nfsSave = await c.put("/api/settings/recording", { ...baseCfg, storage: nfsT });
+  check("save the NFS export", nfsSave.status === 200 && nfsSave.data.config.storage.kind === "nfs" && nfsSave.data.storage.share?.reachable === true, nfsSave.data?.error?.message ?? JSON.stringify(nfsSave.data.storage?.share));
+  await openSession(c, cr.data.id, { seconds: 4 });
+  const onNfs = await waitFor(async () => (await c.get("/api/recordings")).data.items.find((x) => x.location === "remote"));
+  check("a finished recording is copied to the NFS export", !!onNfs);
+  if (onNfs) {
+    const f3 = await fetch(BASE + `/api/recordings/${onNfs.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } });
+    const t3 = await f3.text();
+    check("the recording plays from the NFS export", f3.status === 200 && t3.includes("sync,") && t3.length === onNfs.size_bytes, `${f3.status} ${t3.length} vs ${onNfs.size_bytes}`);
+    check("deleting a recording removes it from the NFS export", (await c.del(`/api/recordings/${onNfs.id}`)).status === 204);
+  }
+  const keep = await c.put("/api/settings/recording", { ...baseCfg, storage: { ...nfsT, keep_local: true } });
+  await openSession(c, cr.data.id, { seconds: 4 });
+  const both = await waitFor(async () => (await c.get("/api/recordings")).data.items.find((x) => x.location === "both"));
+  check("with 'keep a copy' the recording is on both", keep.status === 200 && !!both);
+  if (both) await c.del(`/api/recordings/${both.id}`);
+  await c.put("/api/settings/recording", { ...baseCfg, storage: { ...nfsT, kind: "local" } });
   await c.put("/api/settings/recording", { ...cfg0.config, enabled: false });
   await c.del(`/api/devices/${dr.data.id}`);
   for (const u of (await c.get("/api/users")).data) if (u.username.endsWith(stamp4)) await c.del(`/api/users/${u.id}?keep_inventory=false`);

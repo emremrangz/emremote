@@ -23,67 +23,66 @@ export function parseLocation(d: LocationDraft): { label: string; latitude: numb
 /** Choosing where a device is: search a city, click the map, or type coordinates. Nothing is sent to a map service. */
 export function LocationPicker({ value, onChange, error }: { value: LocationDraft; onChange: (v: LocationDraft) => void; error?: string }) {
   const [q, setQ] = useState("");
+  const [showMap, setShowMap] = useState(false);
   const results = useMemo(() => searchCities(q), [q]);
   const parsed = parseLocation(value);
   const invalid = (value.lat.trim() !== "" || value.lon.trim() !== "") && !parsed;
   const set = (patch: Partial<LocationDraft>) => onChange({ ...value, ...patch });
 
   return (
-    <div className="grid items-start gap-4 md:grid-cols-2">
-      <div className="space-y-3">
-      {parsed ? (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2/50 px-3 py-2 text-[13px]">
-          <MapPin className="h-4 w-4 shrink-0 text-accent" />
-          <input
-            className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-subtle"
-            value={value.label}
-            onChange={(e) => set({ label: e.target.value })}
-            placeholder="Name of the place (optional)"
-            maxLength={100}
-            aria-label="Location name"
-          />
-          <span className="shrink-0 font-mono text-[11px] text-subtle">
-            {parsed.latitude.toFixed(2)}, {parsed.longitude.toFixed(2)}
-          </span>
-          <button type="button" className="shrink-0 rounded p-1 text-muted hover:bg-surface-3 hover:text-fg" onClick={() => { onChange(emptyLocation); setQ(""); }} aria-label="Clear the location" title="Clear the location">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ) : (
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle" />
-          <input
-            className="input pl-8"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search a city, for example Istanbul or Frankfurt"
-            aria-label="Search a city"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {results.length > 0 && (
-            <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-surface p-1 text-[13px] shadow-pop" role="listbox" aria-label="Cities">
-              {results.map((c) => (
-                <li key={cityLabel(c)} role="option" aria-selected="false">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between gap-3 rounded px-2.5 py-1.5 text-left hover:bg-surface-2"
-                    onClick={() => {
-                      onChange({ label: cityLabel(c), lat: String(c[2]), lon: String(c[3]) });
-                      setQ("");
-                    }}
-                  >
-                    <span>{c[0]}</span>
-                    <span className="text-xs text-subtle">{c[1]}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+    <div className="space-y-2">
+      <div className="grid items-start gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="block">
+          <span className="mb-1 block text-xs text-muted">{parsed ? "Place" : "City"}</span>
+          {parsed ? (
+            <div className="input flex items-center gap-2">
+              <MapPin className="h-4 w-4 shrink-0 text-accent" />
+              <input
+                className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-subtle"
+                value={value.label}
+                onChange={(e) => set({ label: e.target.value })}
+                placeholder="Name of the place (optional)"
+                maxLength={100}
+                aria-label="Location name"
+              />
+              <button type="button" className="shrink-0 rounded p-0.5 text-muted hover:bg-surface-3 hover:text-fg" onClick={() => { onChange(emptyLocation); setQ(""); }} aria-label="Clear the location" title="Clear the location">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtle" />
+              <input
+                className="input pl-8"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search, for example Istanbul"
+                aria-label="Search a city"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {results.length > 0 && (
+                <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-surface p-1 text-[13px] shadow-pop" role="listbox" aria-label="Cities">
+                  {results.map((c) => (
+                    <li key={cityLabel(c)} role="option" aria-selected="false">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 rounded px-2.5 py-1.5 text-left hover:bg-surface-2"
+                        onClick={() => {
+                          onChange({ label: cityLabel(c), lat: String(c[2]), lon: String(c[3]) });
+                          setQ("");
+                        }}
+                      >
+                        <span>{c[0]}</span>
+                        <span className="text-xs text-subtle">{c[1]}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="mb-1 block text-xs text-muted">Latitude</span>
           <input className="input font-mono" value={value.lat} onChange={(e) => set({ lat: e.target.value })} placeholder="41.01" inputMode="decimal" aria-label="Latitude" />
@@ -93,13 +92,20 @@ export function LocationPicker({ value, onChange, error }: { value: LocationDraf
           <input className="input font-mono" value={value.lon} onChange={(e) => set({ lon: e.target.value })} placeholder="28.98" inputMode="decimal" aria-label="Longitude" />
         </label>
       </div>
-      {(error || invalid) && <p className="text-xs text-danger">{error ?? "Latitude is between -90 and 90 and longitude between -180 and 180."}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 text-xs text-subtle">
+        <span>Shown on the map on the Overview page.</span>
+        <button type="button" className="text-muted underline-offset-2 hover:text-fg hover:underline" onClick={() => setShowMap((v) => !v)} aria-expanded={showMap}>
+          {showMap ? "Hide the map" : "Choose on the map"}
+        </button>
       </div>
-      <PickMap
-        lat={parsed?.latitude}
-        lon={parsed?.longitude}
-        onPick={(lat, lon) => onChange({ label: parsed ? value.label : "", lat: String(lat), lon: String(lon) })}
-      />
+      {showMap && (
+        <PickMap
+          lat={parsed?.latitude}
+          lon={parsed?.longitude}
+          onPick={(lat, lon) => onChange({ label: parsed ? value.label : "", lat: String(lat), lon: String(lon) })}
+        />
+      )}
+      {(error || invalid) && <p className="text-xs text-danger">{error ?? "Latitude is between -90 and 90 and longitude between -180 and 180."}</p>}
     </div>
   );
 }

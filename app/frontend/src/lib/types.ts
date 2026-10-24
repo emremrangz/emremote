@@ -445,6 +445,22 @@ export interface RecordingConfig {
   retention_days: number;
   max_gb: number;
   devices: Record<string, "on" | "off">;
+  storage: RecordingTarget;
+}
+
+export interface RecordingTarget {
+  kind: "local" | "smb" | "nfs";
+  host: string;
+  share: string;
+  dir: string;
+  username: string;
+  domain: string;
+  uid: number;
+  gid: number;
+  keep_local: boolean;
+  /** Only sent, never received. */
+  password?: string;
+  has_password: boolean;
 }
 
 export interface RecordingStorage {
@@ -456,6 +472,7 @@ export interface RecordingStorage {
   free_bytes: number;
   count: number;
   used_bytes: number;
+  share?: { reachable: boolean; error?: string; pending: number };
 }
 
 export interface Recording {
@@ -470,4 +487,5 @@ export interface Recording {
   started_at: string;
   ended_at: string | null;
   size_bytes: number;
+  location: "local" | "remote" | "both";
 }

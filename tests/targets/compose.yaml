@@ -29,6 +29,21 @@ services:
       behind:
         ipv4_address: 172.29.77.10
 
+  # A file server for the recordings tests: SMB share "recordings" (user rec, the target password) on port 445 and an
+  # NFS version 3 export /srv/nfs on ports 111 and 2049.
+  smb:
+    build: ./smb
+    environment:
+      TARGET_PASSWORD: ${TARGET_PASSWORD:?set TARGET_PASSWORD}
+    ports:
+      - "${TARGET_BIND:-0.0.0.0}:445:445"
+
+  nfs:
+    build: ./nfs
+    ports:
+      - "${TARGET_BIND:-0.0.0.0}:111:111"
+      - "${TARGET_BIND:-0.0.0.0}:2049:2049"
+
 networks:
   behind:
     # No published ports and no route out: only containers attached to it

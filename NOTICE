@@ -9,6 +9,9 @@ the Apache License, Version 2.0.
 The deployment uses the unmodified Apache Guacamole guacd container image
 (guacamole/guacd), PostgreSQL and Caddy, each under its own license.
 
+The recordings share clients are go-smb2 (https://github.com/hirochachacha/go-smb2, BSD 2-Clause) and go-nfs-client
+(https://github.com/willscott/go-nfs-client, BSD 2-Clause, derived from VMware's go-nfs-client), compiled into the application.
+
 The MP4 export bundles mp4-muxer (https://github.com/Vanilagy/mp4-muxer, MIT license).
 
 The world map outlines (app/frontend/src/lib/worldMapData.ts) are generated from Natural Earth

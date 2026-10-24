@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.17 (2026-10-24)
+
+- **Settings is organized in tabs:** Appearance (theme and terminal), Account (password, two-factor, signed-in browsers),
+  Access (allowed target networks, jump hosts, sign-in limits; administrators), Recording (administrators) and System
+  (active remote sessions, system information). The recording card is split into sections.
+- **Add and edit device dialog** is more compact: the location is one row (city, latitude, longitude) with the map one click
+  away, and the edit dialog fits the window without scrolling.
+- **Recordings on a network share, set up in Settings.** Choose an SMB or NFS share (server, share or export, folder,
+  user and password) under Session recording, with a Test connection button. Finished recordings are copied to the share by
+  emremote's own SMB and NFS clients (nothing is mounted, no `.env` or compose changes); playback, download and deletion
+  work from the share, and a share that is down only delays the copy. The `EMREMOTE_RECORDINGS_*` values in
+  `.env` that 0.1.14 documented are removed, because the share is now set in Settings.
+
 ## 0.1.16 (2026-10-24)
 
 - GitHub Actions updated: checkout, setup-go and setup-node v7; Docker setup-qemu, setup-buildx and login v4; metadata v6;

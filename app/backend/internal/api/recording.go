@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/emremrangz/emremote/internal/remotestore"
 	"github.com/emremrangz/emremote/internal/store"
 )
 
@@ -39,10 +40,39 @@ type recordingConfig struct {
 	MaxGB int `json:"max_gb"`
 	// Devices holds per-device exceptions: "on" always records, "off" never records.
 	Devices map[string]string `json:"devices"`
+	// Storage says where finished recordings are kept besides this server.
+	Storage recordingTarget `json:"storage"`
+}
+
+// recordingTarget: the gateway always writes to this server's recordings folder; with a share chosen, finished
+// recordings are copied to it by the application (SMB or NFS clients inside the application, nothing is mounted).
+type recordingTarget struct {
+	Kind     string `json:"kind"` // local, smb or nfs
+	Host     string `json:"host"`
+	Share    string `json:"share"`
+	Dir      string `json:"dir"`
+	Username string `json:"username"`
+	Domain   string `json:"domain"`
+	UID      uint32 `json:"uid"`
+	GID      uint32 `json:"gid"`
+	// KeepLocal keeps the copy on this server after the upload.
+	KeepLocal bool `json:"keep_local"`
+	// Password is only ever received; HasPassword tells that one is saved. The saved password is never returned.
+	Password    string `json:"password,omitempty"`
+	HasPassword bool   `json:"has_password"`
+}
+
+func (t recordingTarget) remote() bool { return t.Kind == "smb" || t.Kind == "nfs" }
+
+func (t recordingTarget) config(password string) remotestore.Config {
+	return remotestore.Config{Kind: t.Kind, Host: t.Host, Share: t.Share, Dir: t.Dir, Username: t.Username, Domain: t.Domain, UID: t.UID, GID: t.GID, Password: password}
 }
 
 func defaultRecordingConfig() recordingConfig {
-	return recordingConfig{RecordAll: true, Protocols: slices.Clone(recordingProtocols), RetentionDays: 30, Devices: map[string]string{}}
+	return recordingConfig{
+		RecordAll: true, Protocols: slices.Clone(recordingProtocols), RetentionDays: 30, Devices: map[string]string{},
+		Storage: recordingTarget{Kind: "local", Dir: "emremote-recordings", UID: 1000, GID: 1000},
+	}
 }
 
 // shouldRecord says whether a session to this device with this protocol is recorded.
@@ -70,6 +100,18 @@ func validateRecordingConfig(c *recordingConfig) string {
 		return "The size limit must be between 0 (no limit) and 100000 GB."
 	case len(c.Devices) > 1000:
 		return "At most 1000 device exceptions."
+	}
+	if c.Storage.Kind == "" {
+		c.Storage.Kind = "local"
+	}
+	switch c.Storage.Kind {
+	case "local":
+	case "smb", "nfs":
+		if msg := c.Storage.config("").Validate(); msg != "" {
+			return msg
+		}
+	default:
+		return "Choose where recordings are kept: this server, an SMB share or an NFS share."
 	}
 	for _, p := range c.Protocols {
 		if !slices.Contains(recordingProtocols, p) {
@@ -170,6 +212,8 @@ func (s *Server) endRecording(p *recordingPlan) {
 	if err := s.store.FinishRecording(ctx, p.id, time.Now(), size); err != nil {
 		slog.Warn("finish recording", "error", err)
 	}
+	// The gateway may still be closing the file; copying to the share starts a little later.
+	time.AfterFunc(30*time.Second, func() { s.syncRecordings(context.Background()) })
 }
 
 // finishStaleRecordings closes the rows of sessions that were running when the server last stopped.
@@ -187,46 +231,6 @@ func (s *Server) finishStaleRecordings(ctx context.Context) {
 	}
 }
 
-func (s *Server) removeRecording(ctx context.Context, x *store.Recording) {
-	if err := os.Remove(s.recordingFile(x.ID)); err != nil && !os.IsNotExist(err) {
-		slog.Warn("delete recording file", "recording", x.ID, "error", err)
-		return
-	}
-	_ = s.store.DeleteRecording(ctx, x.ID)
-}
-
-// pruneRecordings applies the retention settings.
-func (s *Server) pruneRecordings(ctx context.Context) {
-	c := s.recordingConfig(ctx)
-	n := 0
-	if c.RetentionDays > 0 {
-		if old, err := s.store.FinishedRecordingsBefore(ctx, time.Now().AddDate(0, 0, -c.RetentionDays)); err == nil {
-			for _, x := range old {
-				s.removeRecording(ctx, x)
-				n++
-			}
-		}
-	}
-	if c.MaxGB > 0 {
-		limit := int64(c.MaxGB) << 30
-		if _, total, err := s.store.RecordingTotals(ctx); err == nil && total > limit {
-			if oldest, err := s.store.OldestFinishedRecordings(ctx, 500); err == nil {
-				for _, x := range oldest {
-					if total <= limit {
-						break
-					}
-					s.removeRecording(ctx, x)
-					total -= x.SizeBytes
-					n++
-				}
-			}
-		}
-	}
-	if n > 0 {
-		slog.Info("removed old recordings", "count", n)
-	}
-}
-
 // ---- Storage status ----
 
 type recordingStorage struct {
@@ -238,6 +242,14 @@ type recordingStorage struct {
 	FreeBytes  uint64 `json:"free_bytes"`
 	Count      int    `json:"count"`
 	UsedBytes  int64  `json:"used_bytes"`
+	// Share describes the network share, if one is set: whether it answers, and how many recordings still wait to be copied.
+	Share *shareStatus `json:"share,omitempty"`
+}
+
+type shareStatus struct {
+	Reachable bool   `json:"reachable"`
+	Error     string `json:"error,omitempty"`
+	Pending   int    `json:"pending"`
 }
 
 // mountType returns the file system type of the mount that holds dir.
@@ -293,35 +305,6 @@ func (s *Server) recordingStorage(ctx context.Context) recordingStorage {
 
 // ---- Handlers ----
 
-func (s *Server) handleGetRecordingSettings(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"config": s.recordingConfig(r.Context()), "storage": s.recordingStorage(r.Context())})
-}
-
-func (s *Server) handleSetRecordingSettings(w http.ResponseWriter, r *http.Request) {
-	var c recordingConfig
-	if !decodeJSON(w, r, &c) {
-		return
-	}
-	if msg := validateRecordingConfig(&c); msg != "" {
-		writeError(w, http.StatusUnprocessableEntity, "validation_failed", msg)
-		return
-	}
-	if c.Enabled && !s.recordingsWritable() {
-		writeError(w, http.StatusUnprocessableEntity, "storage_unavailable", "The recordings folder ("+s.cfg.RecordingsDir+") is not writable, so recording cannot be turned on. See the deployment guide.")
-		return
-	}
-	raw, _ := json.Marshal(c)
-	if err := s.store.SetSetting(r.Context(), recordingKey, raw); err != nil {
-		writeStoreError(w, r, err, "Setting")
-		return
-	}
-	s.audit(r, "settings.recording", "settings", "", "Session recording", true, map[string]any{
-		"enabled": c.Enabled, "record_all": c.RecordAll, "protocols": c.Protocols, "retention_days": c.RetentionDays, "max_gb": c.MaxGB, "device_exceptions": len(c.Devices),
-	})
-	go s.pruneRecordings(context.Background())
-	s.handleGetRecordingSettings(w, r)
-}
-
 // visibleRecording loads a recording the signed-in user may see: administrators any, others their own.
 func (s *Server) visibleRecording(w http.ResponseWriter, r *http.Request) *store.Recording {
 	id := r.PathValue("id")
@@ -362,55 +345,4 @@ func (s *Server) handleListRecordings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total})
-}
-
-// handleRecordingFile streams the recording to the player (or as a download).
-func (s *Server) handleRecordingFile(w http.ResponseWriter, r *http.Request) {
-	x := s.visibleRecording(w, r)
-	if x == nil {
-		return
-	}
-	f, err := os.Open(s.recordingFile(x.ID))
-	if err != nil {
-		writeError(w, http.StatusNotFound, "file_missing", "The recording file is no longer on the server")
-		return
-	}
-	defer f.Close()
-	fi, err := f.Stat()
-	if err != nil {
-		writeError(w, http.StatusNotFound, "file_missing", "The recording file is no longer on the server")
-		return
-	}
-	download := r.URL.Query().Get("download") == "1"
-	if download || r.Header.Get("Range") == "" {
-		s.audit(r, "recording.view", "recording", x.ID, x.DeviceName+" / "+x.ConnectionName, true, map[string]any{"download": download, "owner": x.Username})
-	}
-	h := w.Header()
-	h.Set("Content-Type", "application/octet-stream")
-	h.Set("Cache-Control", "no-store")
-	h.Set("X-Content-Type-Options", "nosniff")
-	if download {
-		name := strings.Map(func(r rune) rune {
-			if r < 0x20 || strings.ContainsRune(`"\/:*?<>|`, r) || r > 0x7e {
-				return '_'
-			}
-			return r
-		}, x.DeviceName+"-"+x.StartedAt.UTC().Format("2006-01-02-150405"))
-		h.Set("Content-Disposition", `attachment; filename="`+name+`.guac"`)
-	}
-	http.ServeContent(w, r, "", fi.ModTime(), f)
-}
-
-func (s *Server) handleDeleteRecording(w http.ResponseWriter, r *http.Request) {
-	x := s.visibleRecording(w, r)
-	if x == nil {
-		return
-	}
-	if x.EndedAt == nil {
-		writeError(w, http.StatusConflict, "in_progress", "This session is still being recorded")
-		return
-	}
-	s.removeRecording(r.Context(), x)
-	s.audit(r, "recording.delete", "recording", x.ID, x.DeviceName+" / "+x.ConnectionName, true, map[string]any{"owner": x.Username})
-	w.WriteHeader(http.StatusNoContent)
 }

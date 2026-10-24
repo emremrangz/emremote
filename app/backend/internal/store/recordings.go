@@ -20,13 +20,15 @@ type Recording struct {
 	StartedAt      time.Time  `json:"started_at"`
 	EndedAt        *time.Time `json:"ended_at"`
 	SizeBytes      int64      `json:"size_bytes"`
+	// Location is "local" (this server), "remote" (the network share) or "both".
+	Location string `json:"location"`
 }
 
-const recordingCols = `id, session_id, user_id, username, device_id, device_name, connection_name, protocol, started_at, ended_at, size_bytes`
+const recordingCols = `id, session_id, user_id, username, device_id, device_name, connection_name, protocol, started_at, ended_at, size_bytes, location`
 
 func scanRecording(r pgx.Row) (*Recording, error) {
 	var x Recording
-	err := r.Scan(&x.ID, &x.SessionID, &x.UserID, &x.Username, &x.DeviceID, &x.DeviceName, &x.ConnectionName, &x.Protocol, &x.StartedAt, &x.EndedAt, &x.SizeBytes)
+	err := r.Scan(&x.ID, &x.SessionID, &x.UserID, &x.Username, &x.DeviceID, &x.DeviceName, &x.ConnectionName, &x.Protocol, &x.StartedAt, &x.EndedAt, &x.SizeBytes, &x.Location)
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -103,4 +105,14 @@ func (s *Store) OldestFinishedRecordings(ctx context.Context, limit int) ([]*Rec
 func (s *Store) RecordingTotals(ctx context.Context) (count int, bytes int64, err error) {
 	err = s.pool.QueryRow(ctx, `SELECT count(*), coalesce(sum(size_bytes), 0) FROM recordings`).Scan(&count, &bytes)
 	return
+}
+
+// SetRecordingLocation notes where the file now is (and its size on disk).
+func (s *Store) SetRecordingLocation(ctx context.Context, id, location string, size int64) error {
+	return execOne(ctx, s.pool, `UPDATE recordings SET location = $2, size_bytes = $3 WHERE id = $1`, id, location, size)
+}
+
+// LocalOnlyRecordings are finished recordings whose file is only on this server.
+func (s *Store) LocalOnlyRecordings(ctx context.Context) ([]*Recording, error) {
+	return collectRecordings(s.pool.Query(ctx, `SELECT `+recordingCols+` FROM recordings WHERE ended_at IS NOT NULL AND location = 'local' ORDER BY started_at`))
 }

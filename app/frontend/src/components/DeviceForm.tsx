@@ -352,12 +352,12 @@ export function DeviceFormDialog({
         </>
       }
     >
-      <form id="device-form" onSubmit={submit} className="space-y-7" noValidate>
+      <form id="device-form" onSubmit={submit} className="space-y-5" noValidate>
         {step === 0 && (
           <>
             <div>
               <span className="label">Operating system</span>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Operating system">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6" role="radiogroup" aria-label="Operating system">
                 {(Object.keys(OS_LABELS) as OS[]).map((os) => (
                   <button
                     key={os}
@@ -366,7 +366,7 @@ export function DeviceFormDialog({
                     aria-checked={f.os === os}
                     onClick={() => setOS(os)}
                     className={clsx(
-                      "flex h-10 items-center gap-2.5 rounded-lg border px-3 text-sm transition-colors",
+                      "flex h-9 items-center gap-2 rounded-lg border px-2.5 text-sm transition-colors",
                       f.os === os ? "border-fg/70 bg-surface-2 font-medium ring-1 ring-fg/40" : "border-border text-muted hover:border-border-strong hover:text-fg",
                     )}
                   >
@@ -377,14 +377,14 @@ export function DeviceFormDialog({
               </div>
             </div>
 
-            <div className="grid gap-x-6 gap-y-6 sm:grid-cols-2">
+            <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
               <Field label="Name" error={errors.name}>
                 <input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Office PC" autoFocus maxLength={128} />
               </Field>
               <Field label="IP address or hostname" hint={editing ? undefined : "The address emremote connects to."} error={errors.address}>
                 <input className="input font-mono" value={f.address} onChange={(e) => set("address", e.target.value)} placeholder="192.168.1.20" spellCheck={false} autoCapitalize="off" />
               </Field>
-              <Field label="Groups" optional error={errors.group_ids} hint="A device can be in several groups. The first one is its main group.">
+              <Field label="Groups" optional error={errors.group_ids}>
                 <div className="space-y-2">
                   {(f.group_ids.length > 0 || pendingGroups.length > 0) && (
                     <ul className="flex flex-wrap gap-1.5" aria-label="Groups of this device">
@@ -440,7 +440,7 @@ export function DeviceFormDialog({
                       }}
                       aria-label="Add to a group"
                     >
-                      <option value="">{f.group_ids.length || pendingGroups.length ? "Add to another group…" : "No group"}</option>
+                      <option value="">{f.group_ids.length || pendingGroups.length ? "Add to another group…" : "No group (pick one or several)"}</option>
                       {(groups.data ?? []).filter((g) => !f.group_ids.includes(g.id)).map((g) => (
                         <option key={g.id} value={g.id}>
                           {g.name}
@@ -460,7 +460,7 @@ export function DeviceFormDialog({
                   ))}
                 </Select>
               </Field>
-              <Field label="Location" optional hint="Shown on the map on the Overview page." className="sm:col-span-2">
+              <Field label="Location" optional className="sm:col-span-2">
                 <LocationPicker value={loc} onChange={setLoc} error={errors.location} />
               </Field>
             </div>
@@ -516,7 +516,7 @@ export function DeviceFormDialog({
                     </Field>
                   </div>
                   <Field label="Notes" optional error={errors.notes}>
-                    <textarea className="input min-h-[60px] text-[13px]" rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Anything worth remembering. Do not store passwords here." maxLength={10000} />
+                    <textarea className="input min-h-[48px] text-[13px]" rows={2} value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Anything worth remembering. Do not store passwords here." maxLength={10000} />
                   </Field>
                 </div>
               );

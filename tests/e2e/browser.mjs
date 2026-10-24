@@ -809,11 +809,11 @@ await page.evaluate(async (ids) => {
 
 // --- Jump host networks are managed in Settings ---
 {
-  await page.goto(`${BASE}/settings`);
+  await page.goto(`${BASE}/settings?tab=access`);
   const box = page.getByLabel("Networks behind jump hosts");
   await box.waitFor();
   await box.fill("172.29.77.0/24");
-  await page.getByRole("button", { name: "Save", exact: true }).last().click();
+  await page.locator("section", { hasText: "Networks behind jump hosts" }).getByRole("button", { name: "Save", exact: true }).click();
   await page.getByText("Jump host networks saved.").waitFor({ timeout: 8000 });
   await shot("37-settings-jump-hosts", page);
   check("administrators can set the jump host networks in Settings", true);
@@ -1012,7 +1012,7 @@ await page.evaluate(async (ids) => {
   await typeLogin(upw);
   await tp.getByRole("heading", { name: "Overview" }).waitFor();
   // Turn two-factor on from Settings, with the real UI and a QR code.
-  await tp.goto(`${BASE}/settings`);
+  await tp.goto(`${BASE}/settings?tab=account`);
   await tp.getByRole("heading", { name: "Settings" }).waitFor();
   await tp.getByRole("button", { name: "Set up", exact: true }).click();
   await tp.getByRole("dialog").getByLabel("Your password").fill(upw);
@@ -1082,14 +1082,16 @@ await page.evaluate(async (ids) => {
   await mp.getByLabel("Username").fill(uname);
   await mp.getByLabel("Password").fill("Ui-member-pass-1");
   await mp.getByRole("button", { name: "Sign in" }).click();
-  await mp.getByRole("heading", { name: "Overview" }).waitFor();
+  // With devices shared with them, a member's Overview greets them instead of showing an "Overview" heading.
+  await mp.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Overview" }).waitFor();
   await mp.waitForTimeout(600);
   await shot("24-member-overview", mp);
   const navText = await mp.getByRole("navigation", { name: "Main" }).innerText();
   check("a member's menu hides administration and features they do not have", !/Users/.test(navText) && !/Credentials/.test(navText) && /SFTP transfer/.test(navText) && /My activity/.test(navText), navText.replace(/\s+/g, " ").slice(0, 160));
   check("a member without the permissions has no Add device or Quick connect", (await mp.getByRole("button", { name: "Add device" }).count()) === 0 && (await mp.getByRole("button", { name: "Quick connect" }).count()) === 0);
   await mp.goto(`${BASE}/users`);
-  await mp.getByRole("heading", { name: "Overview" }).waitFor();
+  await mp.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Overview" }).waitFor();
+  await mp.waitForTimeout(500);
   check("a member who opens the Users address is sent back to Overview", new URL(mp.url()).pathname === "/");
   await mctx.close();
 
@@ -1127,10 +1129,11 @@ await page.goto(`${BASE}/activity`);
 await page.getByRole("heading", { name: "Activity log" }).waitFor();
 await page.getByText("Remote session ended").first().waitFor();
 await shot("12-activity");
-await page.goto(`${BASE}/settings`);
+await page.goto(`${BASE}/settings?tab=system`);
 await page.getByRole("heading", { name: "Settings" }).waitFor();
 await page.getByText("guacd reachable").waitFor();
 await shot("13-settings");
+await page.goto(`${BASE}/settings`);
 await page.getByRole("button", { name: "Light", exact: true }).click();
 await page.goto(`${BASE}/devices/${deviceId}`);
 await page.getByRole("heading", { name: "Lab workstation" }).waitFor();

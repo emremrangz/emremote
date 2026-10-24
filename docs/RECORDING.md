@@ -22,37 +22,38 @@ It is off until an administrator turns it on in **Settings > Session recording**
 
 ## Where recordings are stored
 
-By default in a Docker volume named `recordings`, mounted into the gateway and the application. Settings shows the
-folder, free space and whether it is writable.
+The gateway always writes a recording to the `recordings` Docker volume on this server while the session runs. In
+**Settings > Session recording > Where recordings are kept** you can also choose an **SMB share** or an **NFS share**:
+when a recording is finished, emremote copies it to the share (and deletes the copy on this server unless you switch on
+"Keep a copy on this server"). Playback, download and deletion work from the share. If the share is down, recordings stay
+on this server and are copied when it answers again; Settings shows whether it answers and how many wait.
 
-### On a network share (NFS or SMB)
+Nothing is mounted: emremote talks to the share with its own SMB and NFS clients, so the container needs no extra
+privileges and no change in `compose.yaml` or `.env`. Fill in the form and press **Test connection** (saving also tests
+it, and writes and deletes a small file).
 
-The application cannot mount shares itself (it runs without privileges), so the share is a Docker volume that you
-configure in `.env`. Fill in the three values before the first recording:
+| | SMB | NFS |
+|---|---|---|
+| Fields | file server, share name, optional folder, user name, password, domain | file server, export path, optional folder, user id and group id |
+| Protocol | SMB 2 or 3 over port 445 | NFS version 3 over TCP (portmapper on port 111) |
+| Server side | a user that may write to the share (empty user name means guest) | the export must allow this machine and non-privileged source ports (`insecure` in `/etc/exports`), and the user id must be allowed to write |
 
-```
-# NFS
-EMREMOTE_RECORDINGS_TYPE=nfs
-EMREMOTE_RECORDINGS_OPTIONS=addr=192.168.1.10,rw,nfsvers=4
-EMREMOTE_RECORDINGS_DEVICE=:/export/emremote
+Good to know:
 
-# SMB / CIFS
-EMREMOTE_RECORDINGS_TYPE=cifs
-EMREMOTE_RECORDINGS_OPTIONS=addr=192.168.1.10,username=emremote,password=...,uid=1000,gid=1000,vers=3.0
-EMREMOTE_RECORDINGS_DEVICE=//192.168.1.10/emremote
-```
+- The file server must be inside the **allowed target networks** (Settings), like every other target. Nothing is sent
+  anywhere else.
+- The share password is stored encrypted with `EMREMOTE_ENCRYPTION_KEY` alone (so copying works while nobody has signed in
+  since the last restart) and is never shown again; leave the field empty to keep it. Anyone who has both the key and the
+  database can read it.
+- The first share setting applies to recordings made afterwards, and to recordings still on this server (they are copied
+  too). Recordings already on a share stay there; if you point emremote at a different share, those recordings cannot
+  be played from the new one.
+- NFS version 4 only servers do not work; enable version 3 on the server. SMB servers that require signing or encryption
+  were not tested.
+- A share name or folder with other characters than letters, digits, space, dot, dash and underscore is refused.
 
-Then `docker compose up -d`. Docker keeps the settings of a volume that already exists, so to switch an existing
-installation: stop it (`docker compose down`), copy the old recordings if you want to keep them, run
-`docker volume rm <project>_recordings` (the project is usually `emremote`) and start again.
-
-The gateway and the application run as user 1000, so the share must let uid 1000 write (for NFS set the export's
-anonymous uid, for SMB use `uid=1000,gid=1000`). The SMB password sits in `.env`, which is already secret. The
-share is mounted by the Docker host, not by emremote; if the share is down, recording fails and Settings says so.
-
-Note: the NFS and SMB settings were checked only as far as Docker Compose turning them into volume options; no NFS or
-SMB server was available for a real mount test. The Docker volume, the settings, retention and playback are what the
-test suite covers (`tests/stack.sh smoke` and `tests/stack.sh recording`).
+Tested against Samba (SMB) and unfs3 (NFS version 3) in the test suite (`tests/stack.sh smoke`); not tested against
+Windows, Synology, TrueNAS or a Linux kernel NFS server.
 
 ## Playback
 

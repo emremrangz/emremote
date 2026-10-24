@@ -1,6 +1,10 @@
 package api
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 const dev1 = "11111111-1111-4111-8111-111111111111"
 
@@ -61,5 +65,41 @@ func TestStorageKind(t *testing.T) {
 		if got := storageKind(in); got != want {
 			t.Errorf("%s: got %s want %s", in, got, want)
 		}
+	}
+}
+
+func TestRecordingShareValidation(t *testing.T) {
+	c := defaultRecordingConfig()
+	if validateRecordingConfig(&c) != "" || c.Storage.Kind != "local" {
+		t.Fatal("the default (this server) must be valid")
+	}
+	good := defaultRecordingConfig()
+	good.Storage = recordingTarget{Kind: "smb", Host: "nas.lan", Share: "recordings", Dir: "emremote", Username: "u"}
+	if msg := validateRecordingConfig(&good); msg != "" {
+		t.Fatalf("a valid share refused: %s", msg)
+	}
+	for name, mod := range map[string]func(*recordingTarget){
+		"unknown kind":   func(t *recordingTarget) { t.Kind = "ftp" },
+		"no host":        func(t *recordingTarget) { t.Host = "" },
+		"path in dir":    func(t *recordingTarget) { t.Dir = "../x" },
+		"dots as dir":    func(t *recordingTarget) { t.Dir = ".." },
+		"slash in share": func(t *recordingTarget) { t.Share = "a/b" },
+	} {
+		c := defaultRecordingConfig()
+		c.Storage = recordingTarget{Kind: "smb", Host: "nas.lan", Share: "recordings"}
+		mod(&c.Storage)
+		if validateRecordingConfig(&c) == "" {
+			t.Errorf("%s should be refused", name)
+		}
+	}
+}
+
+func TestShareSecretNeverInSavedSettings(t *testing.T) {
+	c := defaultRecordingConfig()
+	c.Storage = recordingTarget{Kind: "smb", Host: "h", Share: "s", Password: "hunter2", HasPassword: true}
+	c.Storage.Password, c.Storage.HasPassword = "", false
+	raw, _ := json.Marshal(c)
+	if strings.Contains(string(raw), "hunter2") || strings.Contains(string(raw), `"password"`) {
+		t.Fatalf("password leaked into the saved settings: %s", raw)
 	}
 }

@@ -144,7 +144,7 @@ Off by default. When an administrator turns it on, the gateway writes the screen
 prompt is not captured, but anything the remote computer displays is. Recorded sessions show a REC mark. Recordings are
 readable by administrators and by the person who ran the session; access, download and deletion are in the activity log.
 The files are not encrypted by emremote: protect the volume or share like any other sensitive data (see
-[RECORDING.md](RECORDING.md)). The network share, if any, is mounted by the Docker host, not by emremote.
+[RECORDING.md](RECORDING.md)). A network share (SMB or NFS) set in Settings is reached with clients inside the application, never mounted; its address must be inside the allowed target networks, and its password is stored encrypted with the server key.
 
 ## Cloning devices
 

@@ -32,6 +32,8 @@ import (
 )
 
 type Server struct {
+	// recSync lets one copy of recordings to the network share run at a time.
+	recSync sync.Mutex
 	cfg     *config.Config
 	store   *store.Store
 	box     *secrets.Box
@@ -165,6 +167,7 @@ func (s *Server) Background(ctx context.Context) {
 			} else if n > 0 {
 				slog.Info("removed expired sessions", "count", n)
 			}
+			go s.syncRecordings(ctx)
 			s.limiter.Sweep()
 			s.tickets.sweep()
 			s.shares.sweep()
@@ -338,6 +341,7 @@ func (s *Server) Handler() http.Handler {
 
 	a("GET /api/settings/recording", s.adminOnly(s.handleGetRecordingSettings))
 	a("PUT /api/settings/recording", s.adminOnly(s.handleSetRecordingSettings))
+	a("POST /api/settings/recording/test", s.adminOnly(s.handleTestRecordingShare))
 	a("GET /api/recordings", s.handleListRecordings)
 	a("GET /api/recordings/{id}/file", s.handleRecordingFile)
 	a("DELETE /api/recordings/{id}", s.adminOnly(s.handleDeleteRecording))

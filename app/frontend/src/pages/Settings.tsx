@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer, Globe, Video, X } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader, Badge, ErrorState } from "@/components/ui/misc";
@@ -32,6 +33,19 @@ function Card({ title, description, children, icon, id }: { title: string; descr
         </div>
       </header>
       <div className="px-5 py-4">{children}</div>
+    </section>
+  );
+}
+
+/** A titled group inside a card, separated from the one above by a line. */
+function SubSection({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="space-y-3 border-t border-border pt-5 first:border-t-0 first:pt-0">
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description && <p className="mt-0.5 text-xs text-subtle">{description}</p>}
+      </div>
+      {children}
     </section>
   );
 }
@@ -160,6 +174,8 @@ function RecordingCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pick, setPick] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   useEffect(() => {
     get<{ config: RecordingConfig; storage: RecordingStorage }>("/api/settings/recording")
       .then((r) => {
@@ -179,12 +195,30 @@ function RecordingCard() {
       const r = await put<{ config: RecordingConfig; storage: RecordingStorage }>("/api/settings/recording", { ...cfg, devices: kept });
       setCfg(r.config);
       setStorage(r.storage);
+      setTestResult(null);
       qc.invalidateQueries({ queryKey: keys.system });
       toast.success("Recording settings saved.");
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
+    }
+  };
+  const setTarget = (patch: Partial<RecordingConfig["storage"]>) => {
+    if (!cfg) return;
+    setTestResult(null);
+    setCfg({ ...cfg, storage: { ...cfg.storage, ...patch } });
+  };
+  const testShare = async () => {
+    if (!cfg) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      setTestResult(await post<{ ok: boolean; message: string }>("/api/settings/recording/test", cfg));
+    } catch (e) {
+      setTestResult({ ok: false, message: errorMessage(e) });
+    } finally {
+      setTesting(false);
     }
   };
   const nameOf = (id: string) => devices.data?.find((d) => d.id === id)?.name ?? "Removed device";
@@ -206,7 +240,8 @@ function RecordingCard() {
             label="Record remote sessions"
             description="Sessions started after you save are recorded, and show a REC mark in the toolbar. What the screen shows is recorded, including anything the remote computer displays."
           />
-          <fieldset disabled={!cfg.enabled} className={clsx("space-y-4", !cfg.enabled && "opacity-60")}>
+          <fieldset disabled={!cfg.enabled} className={clsx("space-y-5", !cfg.enabled && "opacity-60")}>
+            <SubSection title="What to record" description="Every connection, or only the devices you pick. Exceptions apply to single devices either way.">
             <div role="radiogroup" aria-label="What to record" className="grid gap-2 sm:grid-cols-2">
               {[
                 [true, "Every connection", "All devices are recorded; pick exceptions below."],
@@ -235,22 +270,6 @@ function RecordingCard() {
                   </label>
                 ))}
               </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Keep recordings for" hint="Older recordings are deleted automatically.">
-                <Select className="input" value={String(cfg.retention_days)} onChange={(e) => setCfg({ ...cfg, retention_days: Number(e.target.value) })}>
-                  {[[7, "7 days"], [14, "14 days"], [30, "30 days"], [90, "90 days"], [180, "180 days"], [365, "1 year"], [0, "Forever"]].concat(
-                    [7, 14, 30, 90, 180, 365, 0].includes(cfg.retention_days) ? [] : [[cfg.retention_days, `${cfg.retention_days} days`]],
-                  ).map(([n, l]) => (
-                    <option key={n} value={n}>
-                      {l}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Size limit (GB)" hint="0 means no limit. When exceeded, the oldest recordings go first.">
-                <input className="input" type="number" min={0} max={100000} value={cfg.max_gb} onChange={(e) => setCfg({ ...cfg, max_gb: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
-              </Field>
             </div>
             <div>
               <p className="label">Exceptions per device</p>
@@ -287,7 +306,99 @@ function RecordingCard() {
                 ))}
               </Select>
             </div>
+            </SubSection>
+            <SubSection title="How long to keep recordings">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Keep recordings for" hint="Older recordings are deleted automatically.">
+                <Select className="input" value={String(cfg.retention_days)} onChange={(e) => setCfg({ ...cfg, retention_days: Number(e.target.value) })}>
+                  {[[7, "7 days"], [14, "14 days"], [30, "30 days"], [90, "90 days"], [180, "180 days"], [365, "1 year"], [0, "Forever"]].concat(
+                    [7, 14, 30, 90, 180, 365, 0].includes(cfg.retention_days) ? [] : [[cfg.retention_days, `${cfg.retention_days} days`]],
+                  ).map(([n, l]) => (
+                    <option key={n} value={n}>
+                      {l}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Size limit (GB)" hint="0 means no limit. When exceeded, the oldest recordings go first.">
+                <input className="input" type="number" min={0} max={100000} value={cfg.max_gb} onChange={(e) => setCfg({ ...cfg, max_gb: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+              </Field>
+            </div>
+            </SubSection>
           </fieldset>
+          <SubSection title="Where recordings are kept" description="The gateway writes to this server first. A share is optional; finished recordings are then copied to it.">
+            <div role="radiogroup" aria-label="Where recordings are kept" className="grid gap-2 sm:grid-cols-3">
+              {([
+                ["local", "This server", "A Docker volume next to emremote."],
+                ["smb", "SMB share", "Windows share, Synology, TrueNAS, Samba."],
+                ["nfs", "NFS share", "NFS version 3 export."],
+              ] as const).map(([k, t, d]) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={cfg.storage.kind === k}
+                  onClick={() => setTarget({ kind: k })}
+                  className={clsx("rounded-lg border px-3 py-2.5 text-left text-sm", cfg.storage.kind === k ? "border-fg/70 bg-surface-2 ring-1 ring-fg/40" : "border-border text-muted hover:border-border-strong")}
+                >
+                  <span className="block font-medium text-fg">{t}</span>
+                  <span className="block text-xs text-subtle">{d}</span>
+                </button>
+              ))}
+            </div>
+            {cfg.storage.kind !== "local" && (
+              <div className="space-y-3 rounded-lg border border-border p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="File server" hint="Address or name. It must be inside the allowed target networks.">
+                    <input className="input font-mono" value={cfg.storage.host} onChange={(e) => setTarget({ host: e.target.value })} placeholder="192.168.1.10" spellCheck={false} autoCapitalize="off" />
+                  </Field>
+                  <Field label={cfg.storage.kind === "smb" ? "Share name" : "Export path"} hint={cfg.storage.kind === "smb" ? "The share as the server lists it." : "For example /export/emremote."}>
+                    <input className="input font-mono" value={cfg.storage.share} onChange={(e) => setTarget({ share: e.target.value })} placeholder={cfg.storage.kind === "smb" ? "recordings" : "/export/emremote"} spellCheck={false} autoCapitalize="off" />
+                  </Field>
+                  <Field label="Folder" optional hint="Created inside the share for the recording files.">
+                    <input className="input font-mono" value={cfg.storage.dir} onChange={(e) => setTarget({ dir: e.target.value })} placeholder="emremote-recordings" spellCheck={false} autoCapitalize="off" />
+                  </Field>
+                  {cfg.storage.kind === "smb" ? (
+                    <>
+                      <Field label="User name" optional hint="Empty means guest access.">
+                        <input className="input" value={cfg.storage.username} onChange={(e) => setTarget({ username: e.target.value })} autoComplete="off" spellCheck={false} />
+                      </Field>
+                      <Field label="Password" optional hint={cfg.storage.has_password ? "Saved. Leave empty to keep it." : undefined}>
+                        <input className="input" type="password" value={cfg.storage.password ?? ""} onChange={(e) => setTarget({ password: e.target.value })} autoComplete="new-password" placeholder={cfg.storage.has_password ? "unchanged" : ""} />
+                      </Field>
+                      <Field label="Domain" optional>
+                        <input className="input" value={cfg.storage.domain} onChange={(e) => setTarget({ domain: e.target.value })} autoComplete="off" spellCheck={false} />
+                      </Field>
+                    </>
+                  ) : (
+                    <>
+                      <Field label="User id" hint="The user id the server sees (needs write access to the export).">
+                        <input className="input" type="number" min={0} max={65535} value={cfg.storage.uid} onChange={(e) => setTarget({ uid: Number(e.target.value) || 0 })} />
+                      </Field>
+                      <Field label="Group id">
+                        <input className="input" type="number" min={0} max={65535} value={cfg.storage.gid} onChange={(e) => setTarget({ gid: Number(e.target.value) || 0 })} />
+                      </Field>
+                    </>
+                  )}
+                </div>
+                <Switch
+                  checked={cfg.storage.keep_local}
+                  onChange={(v) => setTarget({ keep_local: v })}
+                  label="Keep a copy on this server"
+                  description="Otherwise the copy on this server is deleted once the recording is safely on the share."
+                />
+                {cfg.storage.kind === "nfs" && (
+                  <p className="text-xs text-subtle">NFS version 3 only. The export must allow connections from non-privileged ports ("insecure" in /etc/exports) and this machine.</p>
+                )}
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button onClick={testShare} loading={testing}>
+                    Test connection
+                  </Button>
+                  {testResult && <span className={clsx("text-xs", testResult.ok ? "text-success" : "text-danger")}>{testResult.message}</span>}
+                </div>
+              </div>
+            )}
+          </SubSection>
           {storage && (
             <div className="rounded-lg border border-border bg-surface-2/40 px-4 py-3 text-[13px]">
               <p className="font-medium">Storage: {STORAGE_LABEL[storage.kind]}</p>
@@ -296,14 +407,27 @@ function RecordingCard() {
                 {storage.total_bytes > 0 && `. ${bytes(storage.free_bytes)} free of ${bytes(storage.total_bytes)}`}. {storage.count} recording{storage.count === 1 ? "" : "s"}, {bytes(storage.used_bytes)}.
               </p>
               <p className="mt-1 text-xs text-subtle">
-                Recordings live in {storage.path}. To keep them on an NFS or SMB share instead, set the EMREMOTE_RECORDINGS_* values in .env (see docs/RECORDING.md).
+                The gateway writes recordings to {storage.path} on this server first.
+                {cfg.storage.kind !== "local" && " Finished recordings are then copied to the share."}
               </p>
+              {storage.share && (
+                <p className="mt-1 text-xs">
+                  {storage.share.reachable ? (
+                    <span className="text-success">The share answers.</span>
+                  ) : (
+                    <span className="text-danger">The share does not answer: {storage.share.error}. Recordings stay on this server until it does.</span>
+                  )}{" "}
+                  {storage.share.pending > 0 && <span className="text-muted">{storage.share.pending} recording{storage.share.pending === 1 ? "" : "s"} waiting to be copied.</span>}
+                </p>
+              )}
             </div>
           )}
-          {error && <p className="text-xs text-danger">{error}</p>}
-          <Button variant="primary" onClick={save} loading={busy}>
-            Save
-          </Button>
+          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
+            <Button variant="primary" onClick={save} loading={busy}>
+              Save recording settings
+            </Button>
+            {error && <p className="text-xs text-danger">{error}</p>}
+          </div>
         </div>
       )}
     </Card>
@@ -787,50 +911,105 @@ function SystemCard() {
   );
 }
 
+type SettingsTab = "appearance" | "account" | "access" | "recording" | "system";
+
 export default function SettingsPage() {
   const { state } = useAuth();
   const [theme, setTheme] = useTheme();
   const user = state.status === "authenticated" ? state.user : null;
   const { isAdmin } = useAccess();
+  const [params, setParams] = useSearchParams();
+  const { hash } = useLocation();
+  const tabs: { id: SettingsTab; label: string; icon: typeof Sun }[] = [
+    { id: "appearance", label: "Appearance", icon: Sun },
+    { id: "account", label: "Account", icon: ShieldCheck },
+    ...(isAdmin
+      ? [
+          { id: "access" as const, label: "Access", icon: Globe },
+          { id: "recording" as const, label: "Recording", icon: Video },
+        ]
+      : []),
+    { id: "system", label: "System", icon: Server },
+  ];
+  // Links such as /settings#active-sessions open the tab that holds that card.
+  const asked = (hash === "#active-sessions" ? "system" : params.get("tab")) as SettingsTab | null;
+  const tab = tabs.some((t) => t.id === asked) ? (asked as SettingsTab) : "appearance";
+  useEffect(() => {
+    if (hash === "#active-sessions" && tab === "system") document.getElementById("active-sessions")?.scrollIntoView({ block: "start" });
+  }, [hash, tab]);
   return (
     <>
       <PageHeader title="Settings" description={user ? `Signed in as ${user.username} (${user.role})` : undefined} />
-      <div className="grid gap-4">
-        <Card title="Appearance" icon={<Sun className="h-4 w-4" />}>
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                ["dark", "Dark", Moon],
-                ["light", "Light", Sun],
-                ["system", "System", Laptop],
-              ] as [ThemePref, string, typeof Moon][]
-            ).map(([v, l, Icon]) => (
-              <button
-                key={v}
-                onClick={() => setTheme(v)}
-                className={clsx(
-                  "flex items-center gap-2 rounded-md border px-4 py-2 text-sm",
-                  theme === v ? "border-accent bg-accent/10" : "border-border text-muted hover:border-border-strong",
-                )}
-                aria-pressed={theme === v}
-              >
-                <Icon className="h-4 w-4" /> {l}
-              </button>
-            ))}
-          </div>
-        </Card>
-        <TerminalCard />
-        {isAdmin && <TargetNetworksCard />}
-        {isAdmin && <JumpHostCard />}
-        {isAdmin && <SessionLimitsCard />}
-        {isAdmin && <RecordingCard />}
-        <PasswordCard />
-        <Card title="Two-factor authentication" description="Protects your account even if your password leaks." icon={<ShieldCheck className="h-4 w-4" />}>
-          <TwoFactorCard />
-        </Card>
-        <SessionsCard />
-        <ActiveSessionsCard />
-        <SystemCard />
+      <div className="mb-5 flex gap-1 overflow-x-auto border-b border-border" role="tablist" aria-label="Settings sections">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            role="tab"
+            id={`settings-tab-${id}`}
+            aria-selected={tab === id}
+            aria-controls="settings-panel"
+            onClick={() => setParams(id === "appearance" ? {} : { tab: id }, { replace: true })}
+            className={clsx(
+              "-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-[13px] font-medium transition-colors",
+              tab === id ? "border-fg text-fg" : "border-transparent text-muted hover:text-fg",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" /> {label}
+          </button>
+        ))}
+      </div>
+      <div id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`} className="grid max-w-4xl gap-4">
+        {tab === "appearance" && (
+          <>
+            <Card title="Appearance" description="Light or dark interface." icon={<Sun className="h-4 w-4" />}>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["dark", "Dark", Moon],
+                    ["light", "Light", Sun],
+                    ["system", "System", Laptop],
+                  ] as [ThemePref, string, typeof Moon][]
+                ).map(([v, l, Icon]) => (
+                  <button
+                    key={v}
+                    onClick={() => setTheme(v)}
+                    className={clsx(
+                      "flex items-center gap-2 rounded-md border px-4 py-2 text-sm",
+                      theme === v ? "border-accent bg-accent/10" : "border-border text-muted hover:border-border-strong",
+                    )}
+                    aria-pressed={theme === v}
+                  >
+                    <Icon className="h-4 w-4" /> {l}
+                  </button>
+                ))}
+              </div>
+            </Card>
+            <TerminalCard />
+          </>
+        )}
+        {tab === "account" && (
+          <>
+            <PasswordCard />
+            <Card title="Two-factor authentication" description="Protects your account even if your password leaks." icon={<ShieldCheck className="h-4 w-4" />}>
+              <TwoFactorCard />
+            </Card>
+            <SessionsCard />
+          </>
+        )}
+        {tab === "access" && isAdmin && (
+          <>
+            <TargetNetworksCard />
+            <JumpHostCard />
+            <SessionLimitsCard />
+          </>
+        )}
+        {tab === "recording" && isAdmin && <RecordingCard />}
+        {tab === "system" && (
+          <>
+            <ActiveSessionsCard />
+            <SystemCard />
+          </>
+        )}
       </div>
     </>
   );
