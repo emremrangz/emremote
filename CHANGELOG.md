@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.19 (2026-10-29)
+
+- **Quick copy in the vault list:** each entry has copy buttons for the username, the password (or token) and the
+  addresses of the devices that use it. Copying a shared entry's secret asks for a reason, like Show, and is written to
+  the activity log; the last reason is offered again for the next copy.
+- **"Remember me" is removed** from the sign-in screen, from Settings → Sign-in sessions and from the environment
+  (`EMREMOTE_REMEMBER_DAYS` is no longer read). Every sign-in follows the normal sign-in limits.
+
 ## 0.1.18 (2026-10-29)
 
 - **Vault for privileged accounts.** Credentials became the **Vault** (sidebar): sign-ins, SSH keys, API tokens and

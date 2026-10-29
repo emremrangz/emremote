@@ -13,10 +13,8 @@ export default function LoginPage() {
   const notice = state.status === "anonymous" ? state.notice : undefined;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  // The sign-in is typed line by line, like a terminal: login, password, then "remember me".
-  const [step, setStep] = useState<"user" | "pass" | "remember">("user");
-  const [rememberAnswer, setRememberAnswer] = useState("");
-  const rememberRef = useRef<HTMLInputElement>(null);
+  // The sign-in is typed line by line, like a terminal: login, then password.
+  const [step, setStep] = useState<"user" | "pass">("user");
   const [about, setAbout] = useState<About | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,7 +44,6 @@ export default function LoginPage() {
       live = false;
     };
   }, []);
-  const rememberDays = about?.remember_days ?? 0;
 
   // A real check, not decoration: is the server answering?
   useEffect(() => {
@@ -74,7 +71,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (busy) return;
     if (challenge) codeRef.current?.focus();
-    else if (error) (step === "remember" ? rememberRef : username.trim() ? passRef : userRef).current?.focus();
+    else if (error) (username.trim() ? passRef : userRef).current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, error, challenge, step]);
 
@@ -93,17 +90,10 @@ export default function LoginPage() {
       passRef.current?.focus();
       return;
     }
-    const answer = rememberAnswer.trim().toLowerCase();
-    if (answer !== "" && !["y", "yes", "n", "no"].includes(answer)) {
-      setError("Type yes or no.");
-      rememberRef.current?.focus();
-      return;
-    }
-    const remember = rememberDays > 0 && (answer === "y" || answer === "yes");
     setBusy(true);
     setError("");
     try {
-      const r = await login(username, password, remember);
+      const r = await login(username, password);
       if (r) {
         setChallenge(r.challenge);
         setCode("");
@@ -163,13 +153,6 @@ export default function LoginPage() {
       passRef.current?.focus();
       return;
     }
-    // Enter on the password line asks whether to stay signed in (when the server offers that).
-    if (step === "pass" && rememberDays > 0) {
-      setError("");
-      setStep("remember");
-      window.setTimeout(() => rememberRef.current?.focus(), 0);
-      return;
-    }
     await signIn();
   };
 
@@ -191,7 +174,7 @@ export default function LoginPage() {
       shaking={shaking}
       onShakeEnd={() => setShaking(false)}
       onSubmit={submit}
-      onBackgroundClick={() => (challenge ? codeRef : step === "remember" ? rememberRef : step === "pass" ? passRef : userRef).current?.focus()}
+      onBackgroundClick={() => (challenge ? codeRef : step === "pass" ? passRef : userRef).current?.focus()}
     >
           <Neofetch about={about} host={host} secure={secure} />
           {/* Enter on any line submits the form (the visible button only clicks), so the form needs a default button. */}
@@ -252,7 +235,6 @@ export default function LoginPage() {
               className={clsx(field, !reveal && "tracking-[0.2em]")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              onFocus={() => !busy && !challenge && step === "remember" && setStep("pass")}
               autoComplete="current-password"
               disabled={busy || !!challenge}
             />
@@ -268,26 +250,6 @@ export default function LoginPage() {
               {reveal ? "hide" : "show"}
             </button>
           </label>
-          {step === "remember" && rememberDays > 0 && !challenge && (
-            <div className="term-line space-y-1">
-              <label className="flex items-center gap-3">
-                {prompt("remember me (yes/no)")}
-                <input
-                  ref={rememberRef}
-                  aria-label="Remember me"
-                  className={field}
-                  value={rememberAnswer}
-                  onChange={(e) => setRememberAnswer(e.target.value)}
-                  placeholder="no"
-                  autoComplete="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  disabled={busy}
-                />
-              </label>
-              <p className="text-xs text-white/40"># yes keeps this browser signed in for {rememberDays} days with a cookie. Do not use it on a shared computer.</p>
-            </div>
-          )}
           {challenge && (
             <div className="term-line space-y-2 pt-1">
               <label className="flex items-center gap-3">

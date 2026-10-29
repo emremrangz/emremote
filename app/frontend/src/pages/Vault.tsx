@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Check,
   Clock,
+  Copy,
   Eye,
   FileKey2,
   Folder,
@@ -29,7 +30,7 @@ import {
   X,
 } from "lucide-react";
 import * as DM from "@radix-ui/react-dropdown-menu";
-import { PageHeader, EmptyState, ErrorState, Badge, CopyButton } from "@/components/ui/misc";
+import { PageHeader, EmptyState, ErrorState, Badge, CopyButton, copyText } from "@/components/ui/misc";
 import { PageLoader } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
@@ -230,6 +231,114 @@ function SecretRow({ label, value, multiline, plain }: { label: string; value: s
         <CopyButton value={value} label={`Copy ${label.toLowerCase()}`} className="mt-1.5" />
       </div>
     </div>
+  );
+}
+
+// ---- Quick copy ----
+
+/** The secret a row's copy button copies, by kind (SSH keys and notes are shown, not copied from the list). */
+const quickField: Partial<Record<VaultKind, "password" | "token">> = { login: "password", api_token: "token" };
+
+/** Where an entry is used: the addresses of its connections' devices, else the host of its web address. */
+function entryAddresses(e: VaultEntry): string[] {
+  if (e.addresses?.length) return e.addresses;
+  try {
+    return e.url ? [new URL(e.url).hostname] : [];
+  } catch {
+    return [];
+  }
+}
+
+function QuickCopy({ label, title, onCopy, className }: { label: ReactNode; title: string; onCopy: () => Promise<boolean>; className?: string }) {
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const run = async () => {
+    setState("busy");
+    const ok = await onCopy().catch(() => false);
+    setState(ok ? "done" : "idle");
+    if (ok) window.setTimeout(() => setState("idle"), 1200);
+  };
+  return (
+    <button
+      type="button"
+      onClick={run}
+      disabled={state === "busy"}
+      title={title}
+      aria-label={title}
+      className={clsx(
+        "inline-flex h-7 max-w-[11rem] items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 text-xs text-muted transition-colors hover:bg-surface-3 hover:text-fg disabled:opacity-60",
+        className,
+      )}
+    >
+      {state === "done" ? <Check className="h-3 w-3 shrink-0 text-success" /> : <Copy className="h-3 w-3 shrink-0" />}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+function CopyReasonDialog({
+  entry,
+  initialReason,
+  onCopy,
+  onClose,
+}: {
+  entry: VaultEntry | null;
+  initialReason: string;
+  onCopy: (e: VaultEntry, reason: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (entry) {
+      setReason(initialReason);
+      setError("");
+    }
+  }, [entry, initialReason]);
+  const ok = reason.trim().length >= 4;
+  const what = fieldLabels[quickField[entry?.kind ?? "login"] ?? "password"]?.toLowerCase();
+  const run = async () => {
+    if (!ok || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (await onCopy(entry!, reason.trim())) onClose();
+    } catch (e) {
+      setError(e instanceof ApiError && e.fields.reason ? e.fields.reason : errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog
+      open={!!entry}
+      onOpenChange={(o) => !o && onClose()}
+      title={`Copy the ${what} of ${entry?.name ?? ""}`}
+      description="Copying a secret is written to the activity log, with your reason."
+      footer={
+        <>
+          {error && <p className="mr-auto text-sm text-danger">{error}</p>}
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={run} loading={busy} disabled={!ok} icon={<Copy className="h-3.5 w-3.5" />}>
+            Copy
+          </Button>
+        </>
+      }
+    >
+      <Field label="Reason">
+        <input
+          className="input"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          onFocus={(e) => e.target.select()}
+          placeholder="e.g. INC-1042 switch maintenance"
+          autoFocus
+          onKeyDown={(e) => e.key === "Enter" && run()}
+        />
+      </Field>
+    </Dialog>
   );
 }
 
@@ -607,6 +716,9 @@ function EntriesTab({ onEdit }: { onEdit: (e: VaultEntry) => void }) {
   const [checkout, setCheckout] = useState<{ entry: VaultEntry; mode: "checkout" | "request" | "breakglass" } | null>(null);
   const [details, setDetails] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<VaultEntry | null>(null);
+  const [copyAsk, setCopyAsk] = useState<VaultEntry | null>(null);
+  // The last reason given for a copy is offered again (this page only), so a series of copies is quick.
+  const [lastReason, setLastReason] = useState("");
 
   const folders = useMemo(() => {
     const counts = new Map<string, number>();
@@ -633,6 +745,23 @@ function EntriesTab({ onEdit }: { onEdit: (e: VaultEntry) => void }) {
     } catch (err) {
       toast.error(errorMessage(err));
     }
+  };
+
+  const copied = async (value: string, what: string) => {
+    await copyText(value);
+    toast.success(`${what} copied.`);
+    return true;
+  };
+  const copySecret = async (e: VaultEntry, reason: string) => {
+    const field = quickField[e.kind]!;
+    const r = await post<VaultReveal>(`/api/vault/${e.id}/reveal`, { reason, field, purpose: "copy" });
+    const value = r.fields[field];
+    if (!value) {
+      toast.error(`No ${fieldLabels[field].toLowerCase()} is stored in ${e.name}.`);
+      return false;
+    }
+    if (reason) setLastReason(reason);
+    return copied(value, `${fieldLabels[field]} of ${e.name}`);
   };
 
   return (
@@ -668,6 +797,8 @@ function EntriesTab({ onEdit }: { onEdit: (e: VaultEntry) => void }) {
               const gated = e.access_policy !== "open";
               const needsApproval = e.access_policy === "approval" && e.access !== "manage";
               const canReveal = (e.access === "reveal" || e.access === "manage") && e.reveal_policy === "allowed" && (!gated || mine);
+              const field = quickField[e.kind];
+              const addresses = entryAddresses(e);
               return (
                 <li key={e.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-muted">
@@ -684,6 +815,34 @@ function EntriesTab({ onEdit }: { onEdit: (e: VaultEntry) => void }) {
                       {e.tags.length > 0 && ` · ${e.tags.join(", ")}`}
                     </p>
                   </button>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {e.username && <QuickCopy label="User" title={`Copy the username of ${e.name}`} onCopy={() => copied(e.username, `Username of ${e.name}`)} />}
+                    {field && canReveal && e.secret_fields.includes(field) && (
+                      <QuickCopy
+                        label={fieldLabels[field]}
+                        title={`Copy the ${fieldLabels[field].toLowerCase()} of ${e.name}`}
+                        onCopy={async () => {
+                          // Shared entries ask for a reason first; private ones copy at once.
+                          if (e.owner_id === null) {
+                            setCopyAsk(e);
+                            return false;
+                          }
+                          return copySecret(e, "").catch((err) => {
+                            toast.error(errorMessage(err));
+                            return false;
+                          });
+                        }}
+                      />
+                    )}
+                    {addresses.slice(0, 2).map((a) => (
+                      <QuickCopy key={a} label={a} title={`Copy ${a}`} className="font-mono" onCopy={() => copied(a, a)} />
+                    ))}
+                    {addresses.length > 2 && (
+                      <span className="text-2xs text-subtle" title={addresses.slice(2).join(", ")}>
+                        +{addresses.length - 2}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <PolicyBadges e={e} now={now} />
                   </div>
@@ -755,6 +914,7 @@ function EntriesTab({ onEdit }: { onEdit: (e: VaultEntry) => void }) {
         )}
       </div>
       <RevealDialog entry={reveal?.entry ?? null} versionId={reveal?.versionId} onClose={() => setReveal(null)} />
+      <CopyReasonDialog entry={copyAsk} initialReason={lastReason} onCopy={copySecret} onClose={() => setCopyAsk(null)} />
       <CheckoutDialog entry={checkout?.entry ?? null} mode={checkout?.mode ?? "checkout"} onClose={() => setCheckout(null)} />
       <DetailsDialog entryId={details} onClose={() => setDetails(null)} onRevealVersion={(entry, versionId) => setReveal({ entry, versionId })} />
       <ConfirmDialog

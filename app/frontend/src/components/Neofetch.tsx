@@ -8,7 +8,6 @@ export interface About {
   arch?: string;
   go?: string;
   uptime_s?: number;
-  remember_days: number;
 }
 
 // emremote's logo, a terminal window with a prompt. Plain ASCII on purpose: it lines up in any monospace font.

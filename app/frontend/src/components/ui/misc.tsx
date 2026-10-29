@@ -74,24 +74,28 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   );
 }
 
+/** Copies text to the clipboard, with a fallback for non-secure contexts (plain HTTP on the LAN). */
+export async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+}
+
 export function CopyButton({ value, label, className }: { value: string; label?: string; className?: string }) {
   const [done, setDone] = useState(false);
   const copy = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      // Fallback for non-secure contexts (plain HTTP on the LAN).
-      const ta = document.createElement("textarea");
-      ta.value = value;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      ta.remove();
-    }
+    await copyText(value);
     setDone(true);
     setTimeout(() => setDone(false), 1200);
   };

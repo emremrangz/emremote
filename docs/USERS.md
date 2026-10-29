@@ -76,15 +76,12 @@ own account.
 
 ## Signing in
 
-The sign-in screen is a terminal: type the login and press Enter, then the password and press Enter, then
-answer **remember me (yes/no)**. Enter on an empty answer means no. A yes keeps that browser signed in for 30
-days with a cookie (`EMREMOTE_REMEMBER_DAYS`, `0` removes the question); use it only on your own computer. With
+The sign-in screen is a terminal: type the login and press Enter, then the password and press Enter. With
 two-factor on, the code line follows. Clicking a line above lets you change it. Saved passwords are locked when
-emremote restarts, so everyone signs in again after an update, remembered or not.
+emremote restarts, so everyone signs in again after an update.
 
 Administrators set how long people stay signed in under **Settings → Sign-in sessions**: how long an unused
-sign-in lasts (changes apply at once), the longest sign-in (applies to new sign-ins) and how long "remember me"
-lasts (0 removes the question). A remote session that is open counts as activity. When a sign-in ends, an open tab
+sign-in lasts (changes apply at once) and the longest sign-in (applies to new sign-ins). A remote session that is open counts as activity. When a sign-in ends, an open tab
 goes back to the sign-in screen by itself within about 30 seconds.
 
 ## Two-factor authentication

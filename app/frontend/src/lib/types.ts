@@ -316,6 +316,7 @@ export interface VaultEntry extends Credential {
   my_request: VaultRequest | null;
   pending_requests: number;
   grants?: VaultGrant[];
+  addresses: string[];
 }
 
 export interface VaultVersion {

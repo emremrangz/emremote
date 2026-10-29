@@ -73,11 +73,7 @@ func (s *Server) loadSession(r *http.Request, touch bool) (*store.Session, *stor
 	}
 	now := time.Now()
 	lim := s.limits()
-	idle := lim.Idle
-	if sess.Remember {
-		idle = lim.RememberIdle
-	}
-	if now.After(sess.ExpiresAt) || now.Sub(sess.LastSeenAt) > idle {
+	if now.After(sess.ExpiresAt) || now.Sub(sess.LastSeenAt) > lim.Idle {
 		_ = s.store.DeleteSession(r.Context(), sess.ID)
 		return nil, nil, errors.New("session expired")
 	}
@@ -138,17 +134,10 @@ func (s *Server) requireAuthTouch(next http.HandlerFunc, touch bool) http.Handle
 	})
 }
 
-func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user *store.User, remember bool) (*store.Session, error) {
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user *store.User) (*store.Session, error) {
 	token := auth.RandomToken(32)
-	lim := s.limits()
-	ttl := lim.TTL
-	// "Remember me" only counts when the operator allows it.
-	remember = remember && lim.RememberTTL > 0
-	if remember {
-		ttl = lim.RememberTTL
-	}
+	ttl := s.limits().TTL
 	sess := &store.Session{
-		Remember:  remember,
 		ID:        auth.HashToken(token),
 		UserID:    user.ID,
 		CSRFToken: auth.RandomToken(32),
@@ -261,7 +250,7 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.audit(r, "auth.setup", "user", user.ID, user.Username, true, nil)
-	sess, err := s.startSession(w, r, user, false)
+	sess, err := s.startSession(w, r, user)
 	if err != nil {
 		writeStoreError(w, r, err, "session")
 		return
@@ -283,7 +272,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
-		Remember bool   `json:"remember"`
+		// Accepted and ignored: "remember me" was removed, older clients still send it.
+		Remember bool `json:"remember"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -329,17 +319,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if user.TwoFactor {
 		// The password is right; the second factor decides. Failures there count
 		// against the same limiter, so the counters are only reset after it.
-		ch := s.challenges.put(user.ID, req.Password, ip, req.Remember)
+		ch := s.challenges.put(user.ID, req.Password, ip)
 		writeJSON(w, http.StatusAccepted, map[string]any{"two_factor_required": true, "challenge": ch, "expires_in": int(challengeTTL.Seconds())})
 		return
 	}
 	s.limiter.Succeed(uname)
-	s.completeLogin(w, r, user, req.Password, "", req.Remember)
+	s.completeLogin(w, r, user, req.Password, "")
 }
 
 // completeLogin unlocks the vault, starts the session and answers the sign-in
 // request. factor names the second factor used ("" when none).
-func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, user *store.User, password, factor string, remember bool) {
+func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, user *store.User, password, factor string) {
 	r = r.WithContext(context.WithValue(r.Context(), ctxUser, user))
 	if err := s.openVault(r, user, password); err != nil {
 		if errors.Is(err, errVaultNeedsAdmin) {
@@ -354,7 +344,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, user *sto
 			"Your password is correct, but saved passwords could not be unlocked (was EMREMOTE_ENCRYPTION_KEY changed?). See TROUBLESHOOTING.md: reset-password --forget-saved-passwords.")
 		return
 	}
-	sess, err := s.startSession(w, r, user, remember)
+	sess, err := s.startSession(w, r, user)
 	if err != nil {
 		writeStoreError(w, r, err, "session")
 		return
@@ -363,9 +353,6 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, user *sto
 	details := map[string]any{}
 	if factor != "" {
 		details["second_factor"] = factor
-	}
-	if sess.Remember {
-		details["remember"] = true
 	}
 	s.audit(r, "auth.login", "user", user.ID, user.Username, true, details)
 	writeJSON(w, http.StatusOK, meResponse{User: user, CSRFToken: sess.CSRFToken, ExpiresAt: sess.ExpiresAt})

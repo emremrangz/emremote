@@ -75,7 +75,7 @@ await page.reload();
 await page.getByRole("button", { name: "Quick connect" }).waitFor();
 await shot("02-overview-empty");
 
-// --- The terminal sign-in: login, Enter, password, Enter, remember me ---
+// --- The terminal sign-in: login, Enter, password, Enter ---
 {
   const c2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const p2 = await c2.newPage();
@@ -85,17 +85,9 @@ await shot("02-overview-empty");
   await p2.getByLabel("Password").waitFor({ state: "visible" });
   await p2.getByLabel("Password").fill(ADMIN_PASSWORD);
   await p2.keyboard.press("Enter");
-  await p2.getByLabel("Remember me").waitFor({ timeout: 5000 });
-  await p2.getByLabel("Remember me").fill("maybe");
-  await p2.keyboard.press("Enter");
-  const bad = await p2.getByRole("alert").textContent();
-  await p2.getByLabel("Remember me").fill("yes");
-  await p2.keyboard.press("Enter");
   await p2.getByRole("link", { name: "Statistics" }).waitFor({ timeout: 15000 });
-  const cookie = (await c2.cookies()).find((k) => k.httpOnly);
-  const days = cookie ? (cookie.expires - Date.now() / 1000) / 86400 : 0;
-  check("the sign-in is typed line by line and asks 'remember me'", /yes or no/.test(bad), bad);
-  check("answering yes keeps the browser signed in for about 30 days", days > 29 && days < 31, `${days.toFixed(2)} days`);
+  check("the sign-in is typed line by line and Enter on the password signs in", true);
+  check("the sign-in no longer asks 'remember me'", (await p2.getByLabel("Remember me").count()) === 0);
   await c2.close();
 }
 

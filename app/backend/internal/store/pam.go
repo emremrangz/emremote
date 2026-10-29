@@ -80,6 +80,8 @@ type VaultEntry struct {
 	MyRequest       *VaultRequest `json:"my_request"`
 	PendingRequests int           `json:"pending_requests"`
 	Grants          []VaultGrant  `json:"grants,omitempty"`
+	// Addresses of the devices whose connections use the entry (only devices the user can see).
+	Addresses []string `json:"addresses"`
 }
 
 // vaultLevelSQL computes the access level of user $1 (team $2, administrator $3).
@@ -141,8 +143,26 @@ func (s *Store) queryVault(ctx context.Context, u *User, id string) ([]*VaultEnt
 	byID := map[string]*VaultEntry{}
 	ids := make([]string, len(out))
 	for i, e := range out {
+		e.Addresses = []string{}
 		byID[e.ID] = e
 		ids[i] = e.ID
+	}
+	arows, err := s.pool.Query(ctx, `SELECT DISTINCT c.credential_id::text, d.address FROM connections c JOIN devices d ON d.id = c.device_id
+		WHERE c.credential_id::text = ANY($1) AND d.id IN (SELECT emr_visible_devices($2)) ORDER BY 1, 2`, ids, u.ID)
+	if err != nil {
+		return nil, err
+	}
+	for arows.Next() {
+		var credID, addr string
+		if err := arows.Scan(&credID, &addr); err != nil {
+			arows.Close()
+			return nil, err
+		}
+		byID[credID].Addresses = append(byID[credID].Addresses, addr)
+	}
+	arows.Close()
+	if err := arows.Err(); err != nil {
+		return nil, err
 	}
 	krows, err := s.pool.Query(ctx, `SELECT `+checkoutCols+` FROM vault_checkouts k
 		WHERE k.checked_in_at IS NULL AND k.credential_id::text = ANY($1)`, ids)

@@ -13,13 +13,12 @@ var processStart = time.Now()
 // aboutInfo is what the sign-in screen shows next to the logo. It is public, so it holds only
 // coarse facts about the application and its container: no host name, kernel, CPU, memory or addresses.
 type aboutInfo struct {
-	Version      string `json:"version,omitempty"`
-	Runtime      string `json:"runtime,omitempty"` // docker, podman or native
-	OS           string `json:"os,omitempty"`
-	Arch         string `json:"arch,omitempty"`
-	Go           string `json:"go,omitempty"`
-	UptimeS      int64  `json:"uptime_s,omitempty"`
-	RememberDays int    `json:"remember_days"`
+	Version string `json:"version,omitempty"`
+	Runtime string `json:"runtime,omitempty"` // docker, podman or native
+	OS      string `json:"os,omitempty"`
+	Arch    string `json:"arch,omitempty"`
+	Go      string `json:"go,omitempty"`
+	UptimeS int64  `json:"uptime_s,omitempty"`
 }
 
 func containerRuntime() string {
@@ -43,7 +42,7 @@ func prettyOSName(osRelease string) string {
 }
 
 func (s *Server) handleAbout(w http.ResponseWriter, r *http.Request) {
-	out := aboutInfo{RememberDays: int(s.limits().RememberTTL.Hours() / 24)}
+	var out aboutInfo
 	if s.cfg.LoginInfo {
 		out.Version = s.version
 		out.Runtime = containerRuntime()

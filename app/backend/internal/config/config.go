@@ -24,10 +24,6 @@ type Config struct {
 	EncryptionKey []byte
 	SessionTTL    time.Duration
 	SessionIdle   time.Duration
-	// RememberTTL is how long a "remember me" session lasts (EMREMOTE_REMEMBER_DAYS, default 30; 0 turns the option off).
-	// RememberIdle is how long such a session may sit unused.
-	RememberTTL  time.Duration
-	RememberIdle time.Duration
 	// LoginInfo shows version and environment details on the sign-in screen (EMREMOTE_LOGIN_INFO=false hides them).
 	LoginInfo      bool
 	CookieSecure   bool
@@ -148,16 +144,6 @@ func Load() (*Config, error) {
 	c.JumpTargetNetworks, err = prefixes("EMREMOTE_JUMP_TARGET_NETWORKS", "")
 	errs = appendErr(errs, err)
 	c.HideSponsor = strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_HIDE_SPONSOR")), "true")
-	days, derr := nonNegativeInt("EMREMOTE_REMEMBER_DAYS", 30)
-	errs = appendErr(errs, derr)
-	if days > 365 {
-		errs = append(errs, errors.New("EMREMOTE_REMEMBER_DAYS must be 365 or less"))
-	}
-	c.RememberTTL = time.Duration(days) * 24 * time.Hour
-	c.RememberIdle = 7 * 24 * time.Hour
-	if c.RememberIdle > c.RememberTTL {
-		c.RememberIdle = c.RememberTTL
-	}
 	c.LoginInfo = !strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_LOGIN_INFO")), "false")
 	c.UpdateCheck = !strings.EqualFold(strings.TrimSpace(os.Getenv("EMREMOTE_UPDATE_CHECK")), "false")
 	if c.SetupToken != "" && len(c.SetupToken) < 12 {

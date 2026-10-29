@@ -163,7 +163,7 @@ func (s *Server) Background(ctx context.Context) {
 		case <-recs.C:
 			s.pruneRecordings(ctx)
 		case <-t.C:
-			if n, err := s.store.DeleteExpiredSessions(ctx, s.limits().Idle, s.limits().RememberIdle); err != nil {
+			if n, err := s.store.DeleteExpiredSessions(ctx, s.limits().Idle); err != nil {
 				slog.Warn("session cleanup failed", "error", err)
 			} else if n > 0 {
 				slog.Info("removed expired sessions", "count", n)

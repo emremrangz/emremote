@@ -621,9 +621,8 @@ function TargetNetworksCard() {
 interface SessionLimits {
   idle_minutes: number;
   ttl_minutes: number;
-  remember_days: number;
   saved: boolean;
-  env: { idle_minutes: number; ttl_minutes: number; remember_days: number };
+  env: { idle_minutes: number; ttl_minutes: number };
 }
 
 const IDLE_CHOICES: [number, string][] = [
@@ -632,7 +631,6 @@ const IDLE_CHOICES: [number, string][] = [
 const LIFETIME_CHOICES: [number, string][] = [
   [60, "1 hour"], [240, "4 hours"], [480, "8 hours"], [720, "12 hours"], [1440, "1 day"], [4320, "3 days"], [10080, "7 days"], [43200, "30 days"],
 ];
-const REMEMBER_CHOICES: [number, string][] = [[0, "Off (no remember me)"], [7, "7 days"], [14, "14 days"], [30, "30 days"], [90, "90 days"]];
 
 function minutesLabel(m: number): string {
   if (m % 1440 === 0) return `${m / 1440} day${m === 1440 ? "" : "s"}`;
@@ -649,14 +647,14 @@ function SessionLimitsCard() {
   const toast = useToast();
   const qc = useQueryClient();
   const [loaded, setLoaded] = useState(false);
-  const [v, setV] = useState({ idle_minutes: 120, ttl_minutes: 720, remember_days: 30 });
+  const [v, setV] = useState({ idle_minutes: 120, ttl_minutes: 720 });
   const [fromEnv, setFromEnv] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     get<SessionLimits>("/api/settings/sessions")
       .then((r) => {
-        setV({ idle_minutes: r.idle_minutes, ttl_minutes: r.ttl_minutes, remember_days: r.remember_days });
+        setV({ idle_minutes: r.idle_minutes, ttl_minutes: r.ttl_minutes });
         setFromEnv(!r.saved);
         setLoaded(true);
       })
@@ -683,7 +681,7 @@ function SessionLimitsCard() {
       icon={<Timer className="h-4 w-4" />}
     >
       <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Sign out when unused for" hint="Takes effect at once.">
             <Select className="input" value={String(v.idle_minutes)} onChange={(e) => setV({ ...v, idle_minutes: Number(e.target.value) })} disabled={!loaded}>
               {withCurrent(IDLE_CHOICES, v.idle_minutes, minutesLabel).map(([n, l]) => (
@@ -702,18 +700,9 @@ function SessionLimitsCard() {
               ))}
             </Select>
           </Field>
-          <Field label="Remember me" hint="The sign-in screen asks; a yes lasts this long.">
-            <Select className="input" value={String(v.remember_days)} onChange={(e) => setV({ ...v, remember_days: Number(e.target.value) })} disabled={!loaded}>
-              {withCurrent(REMEMBER_CHOICES, v.remember_days, (n) => `${n} days`).map(([n, l]) => (
-                <option key={n} value={n}>
-                  {l}
-                </option>
-              ))}
-            </Select>
-          </Field>
         </div>
         {error && <p className="text-xs text-danger">{error}</p>}
-        {fromEnv && <p className="text-xs text-subtle">These are the defaults from the environment (EMREMOTE_SESSION_IDLE_TIMEOUT, EMREMOTE_SESSION_TTL, EMREMOTE_REMEMBER_DAYS). Saving here replaces them.</p>}
+        {fromEnv && <p className="text-xs text-subtle">These are the defaults from the environment (EMREMOTE_SESSION_IDLE_TIMEOUT, EMREMOTE_SESSION_TTL). Saving here replaces them.</p>}
         <p className="text-xs text-subtle">Everyone is also signed out whenever emremote restarts, because saved passwords are locked until someone signs in.</p>
         <Button variant="primary" onClick={save} loading={busy} disabled={!loaded}>
           Save

@@ -10,7 +10,7 @@ Open RDP, VNC, SSH and Telnet sessions in a browser tab, with no agent installed
 
 | | |
 |---|---|
-| ![Sign-in](docs/images/login.png)<br>**Sign-in** as a terminal: type each line, answer "remember me" | ![Overview](docs/images/overview.png)<br>**Overview**: reachability, live sessions and recent activity |
+| ![Sign-in](docs/images/login.png)<br>**Sign-in** as a terminal: type each line and press Enter | ![Overview](docs/images/overview.png)<br>**Overview**: reachability, live sessions and recent activity |
 | ![Devices](docs/images/devices.png)<br>**Devices**: groups, tags, search and one-click connect | ![Switches and routers](docs/images/device.png)<br>**Switches and routers**: vendor, firmware, model and serial read over SSH |
 | ![Quick view](docs/images/quick-view.png)<br>**Quick view**: a session in a window over the page you are on | ![Workspace](docs/images/workspace.png)<br>**Workspace**: sessions as tabs, one to four panes |
 | ![Switch health](docs/images/switch-system.png)<br>**Switch health**: CPU, memory, firmware and uptime | ![Statistics](docs/images/statistics.png)<br>**Statistics**: usage by day and hour, fleet and security |
