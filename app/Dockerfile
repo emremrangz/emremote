@@ -3,7 +3,7 @@
 
 # ---- Web UI ----
 # The web UI and the Go compiler always run on the build machine; only the Go output targets the final architecture.
-FROM --platform=$BUILDPLATFORM node:22.23.3-alpine3.24 AS web
+FROM --platform=$BUILDPLATFORM node:22.23.4-alpine3.24 AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 # npm 10 (bundled with Node 22) cannot resolve vitest 4's optional peer set.
