@@ -236,21 +236,65 @@ type Credential struct {
 	UsageCount   int       `json:"usage_count"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	VaultFields
+}
+
+// VaultFields are the privileged access vault settings of a credential (none of them secret).
+type VaultFields struct {
+	Kind                 string     `json:"kind"`
+	Folder               string     `json:"folder"`
+	Tags                 []string   `json:"tags"`
+	URL                  string     `json:"url"`
+	Description          string     `json:"description"`
+	RevealPolicy         string     `json:"reveal_policy"`
+	AccessPolicy         string     `json:"access_policy"`
+	MaxCheckoutMinutes   int        `json:"max_checkout_minutes"`
+	BreakGlass           bool       `json:"break_glass"`
+	RotationConnectionID *string    `json:"rotation_connection_id"`
+	RotateAfterCheckin   bool       `json:"rotate_after_checkin"`
+	RotationIntervalDays int        `json:"rotation_interval_days"`
+	SecretChangedAt      *time.Time `json:"secret_changed_at"`
+	RotatedAt            *time.Time `json:"rotated_at"`
+	RotationStatus       string     `json:"rotation_status"`
+	RotationError        string     `json:"rotation_error"`
+	PasswordStrength     *int       `json:"password_strength"`
 }
 
 const credCols = `cr.id, cr.owner_id, cr.name, cr.username, cr.domain, cr.secret_enc, cr.secret_fields,
-	(SELECT count(*) FROM connections c WHERE c.credential_id = cr.id), cr.created_at, cr.updated_at`
+	(SELECT count(*) FROM connections c WHERE c.credential_id = cr.id), cr.created_at, cr.updated_at,
+	cr.kind, cr.folder, cr.tags, cr.url, cr.description, cr.reveal_policy, cr.access_policy, cr.max_checkout_minutes,
+	cr.break_glass, cr.rotation_connection_id, cr.rotate_after_checkin, cr.rotation_interval_days, cr.secret_changed_at,
+	cr.rotated_at, cr.rotation_status, cr.rotation_error, cr.password_strength`
 
 func scanCredential(row pgx.Row) (*Credential, error) {
 	var c Credential
-	err := row.Scan(&c.ID, &c.OwnerID, &c.Name, &c.Username, &c.Domain, &c.SecretEnc, &c.SecretFields, &c.UsageCount, &c.CreatedAt, &c.UpdatedAt)
-	if err != nil {
+	var strength *int16
+	if err := row.Scan(credDest(&c, &strength)...); err != nil {
 		return nil, mapErr(err)
 	}
+	c.finish(strength)
+	return &c, nil
+}
+
+// credDest lists the scan destinations matching credCols.
+func credDest(c *Credential, strength **int16) []any {
+	return []any{&c.ID, &c.OwnerID, &c.Name, &c.Username, &c.Domain, &c.SecretEnc, &c.SecretFields, &c.UsageCount, &c.CreatedAt, &c.UpdatedAt,
+		&c.Kind, &c.Folder, &c.Tags, &c.URL, &c.Description, &c.RevealPolicy, &c.AccessPolicy, &c.MaxCheckoutMinutes,
+		&c.BreakGlass, &c.RotationConnectionID, &c.RotateAfterCheckin, &c.RotationIntervalDays, &c.SecretChangedAt,
+		&c.RotatedAt, &c.RotationStatus, &c.RotationError, strength}
+}
+
+func (c *Credential) finish(strength *int16) {
 	if c.SecretFields == nil {
 		c.SecretFields = []string{}
 	}
-	return &c, nil
+	if c.Tags == nil {
+		c.Tags = []string{}
+	}
+	if strength != nil {
+		v := int(*strength)
+		c.PasswordStrength = &v
+	}
 }
 
 // ListCredentials returns the saved credentials of one owner (nil = the shared ones).
@@ -270,7 +314,7 @@ func (s *Store) GetCredential(ctx context.Context, id string) (*Credential, erro
 	return scanCredential(s.pool.QueryRow(ctx, `SELECT `+credCols+` FROM credentials cr WHERE cr.id = $1`, id))
 }
 
-func (s *Store) CreateCredential(ctx context.Context, owner *string, name, username, domain string,
+func (s *Store) CreateCredential(ctx context.Context, owner *string, name, username, domain string, vf VaultFields,
 	sealSecret func(id string) ([]byte, []string, error)) (*Credential, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -278,15 +322,19 @@ func (s *Store) CreateCredential(ctx context.Context, owner *string, name, usern
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 	var id string
-	if err := tx.QueryRow(ctx, `INSERT INTO credentials (owner_id, name, username, domain) VALUES ($1, $2, $3, $4) RETURNING id`,
-		owner, name, username, domain).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO credentials (owner_id, name, username, domain, kind, folder, tags, url, description,
+		reveal_policy, access_policy, max_checkout_minutes, break_glass, rotation_connection_id, rotate_after_checkin,
+		rotation_interval_days) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
+		owner, name, username, domain, vf.Kind, vf.Folder, vf.Tags, vf.URL, vf.Description, vf.RevealPolicy, vf.AccessPolicy,
+		vf.MaxCheckoutMinutes, vf.BreakGlass, vf.RotationConnectionID, vf.RotateAfterCheckin, vf.RotationIntervalDays).Scan(&id); err != nil {
 		return nil, mapErr(err)
 	}
 	ct, fields, err := sealSecret(id)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE credentials SET secret_enc = $2, secret_fields = $3 WHERE id = $1`, id, ct, fields); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE credentials SET secret_enc = $2, secret_fields = $3, secret_changed_at = now(),
+		password_strength = $4 WHERE id = $1`, id, ct, fields, vf.PasswordStrength); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -295,19 +343,26 @@ func (s *Store) CreateCredential(ctx context.Context, owner *string, name, usern
 	return s.GetCredential(ctx, id)
 }
 
-func (s *Store) UpdateCredential(ctx context.Context, id, name, username, domain string) (*Credential, error) {
-	if err := execOne(ctx, s.pool, `UPDATE credentials SET name = $2, username = $3, domain = $4, updated_at = now() WHERE id = $1`,
-		id, name, username, domain); err != nil {
+func (s *Store) UpdateCredential(ctx context.Context, id, name, username, domain string, vf VaultFields) (*Credential, error) {
+	if err := execOne(ctx, s.pool, `UPDATE credentials SET name = $2, username = $3, domain = $4, kind = $5, folder = $6,
+		tags = $7, url = $8, description = $9, reveal_policy = $10, access_policy = $11, max_checkout_minutes = $12,
+		break_glass = $13, rotation_connection_id = $14, rotate_after_checkin = $15, rotation_interval_days = $16,
+		updated_at = now() WHERE id = $1`,
+		id, name, username, domain, vf.Kind, vf.Folder, vf.Tags, vf.URL, vf.Description, vf.RevealPolicy, vf.AccessPolicy,
+		vf.MaxCheckoutMinutes, vf.BreakGlass, vf.RotationConnectionID, vf.RotateAfterCheckin, vf.RotationIntervalDays); err != nil {
 		return nil, err
 	}
 	return s.GetCredential(ctx, id)
 }
 
-func (s *Store) SetCredentialSecret(ctx context.Context, id string, ct []byte, fields []string) error {
+// SetCredentialSecret replaces the current secret. strength is the new password's
+// strength (nil without a password).
+func (s *Store) SetCredentialSecret(ctx context.Context, id string, ct []byte, fields []string, strength *int) error {
 	if fields == nil {
 		fields = []string{}
 	}
-	return execOne(ctx, s.pool, `UPDATE credentials SET secret_enc = $2, secret_fields = $3, updated_at = now() WHERE id = $1`, id, ct, fields)
+	return execOne(ctx, s.pool, `UPDATE credentials SET secret_enc = $2, secret_fields = $3, password_strength = $4,
+		secret_changed_at = now(), updated_at = now() WHERE id = $1`, id, ct, fields, strength)
 }
 
 func (s *Store) DeleteCredential(ctx context.Context, id string) error {

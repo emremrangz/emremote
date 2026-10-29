@@ -23,7 +23,9 @@ Open RDP, VNC, SSH and Telnet sessions in a browser tab, with no agent installed
 - **Device inventory** with groups, tags, search, locations on a world map, cloning, and import/export.
 - **Files**: SFTP file manager, RDP transfer drive, and copy between servers.
 - **Details without an agent**: OS, hardware, VM or physical, over SSH.
-- **Users and teams**, two-factor sign-in, an audit log and an encrypted password vault.
+- **Vault for privileged accounts**: passwords, SSH keys, API tokens and notes; show with a reason,
+  exclusive check-out, approval requests, break-glass, password rotation on Linux, history and a health report.
+- **Users and teams**, two-factor sign-in and an audit log.
 - **Extras**: view-only session sharing, Wake-on-LAN, jump hosts, terminal themes.
 
 ## Setup
@@ -119,7 +121,7 @@ Without it the window shows the command to run on the server instead. Details an
 
 ## Documentation
 
-[Deployment](docs/DEPLOYMENT.md) · [Connections](docs/CONNECTIONS.md) · [Session recording](docs/RECORDING.md) · [Users](docs/USERS.md) ·
+[Deployment](docs/DEPLOYMENT.md) · [Connections](docs/CONNECTIONS.md) · [Vault](docs/VAULT.md) · [Session recording](docs/RECORDING.md) · [Users](docs/USERS.md) ·
 [Security](docs/SECURITY.md) · [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) ·
 [Troubleshooting](docs/TROUBLESHOOTING.md) · [Limitations](docs/LIMITATIONS.md)
 

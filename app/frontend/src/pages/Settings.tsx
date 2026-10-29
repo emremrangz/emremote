@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer, Globe, Video, X } from "lucide-react";
+import { Monitor, Moon, Sun, Laptop, ShieldCheck, Server, Radio, TerminalSquare, Minus, Plus, RotateCcw, Check, Route, Timer, Globe, Video, X, KeyRound } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader, Badge, ErrorState } from "@/components/ui/misc";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,8 @@ import { useToast } from "@/components/ui/Toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProtocolBadge } from "@/components/Status";
 import { Switch } from "@/components/ui/Field";
-import type { RecordingConfig, RecordingStorage } from "@/lib/types";
+import type { RecordingConfig, RecordingStorage, VaultPolicy } from "@/lib/types";
+import { generatePassword } from "@/lib/vault";
 
 function Card({ title, description, children, icon, id }: { title: string; description?: ReactNode; children: ReactNode; icon?: ReactNode; id?: string }) {
   return (
@@ -722,6 +723,95 @@ function SessionLimitsCard() {
   );
 }
 
+function VaultPolicyCard() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const [v, setV] = useState<VaultPolicy | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sample, setSample] = useState("");
+  useEffect(() => {
+    get<VaultPolicy>("/api/vault/policy")
+      .then((p) => {
+        setV(p);
+        setSample(generatePassword(p));
+      })
+      .catch((e) => setError(errorMessage(e)));
+  }, []);
+  const change = (patch: Partial<VaultPolicy>) => {
+    const next = { ...v!, ...patch };
+    setV(next);
+    if (next.lower || next.upper || next.digits || next.symbols) setSample(generatePassword(next));
+  };
+  const save = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await put("/api/settings/vault", v);
+      qc.invalidateQueries({ queryKey: ["vault-policy"] });
+      toast.success("Vault policy saved.");
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card
+      title="Vault passwords"
+      description="Passwords the vault generates in forms and when it changes passwords on servers."
+      icon={<KeyRound className="h-4 w-4" />}
+    >
+      {!v ? (
+        error ? <p className="text-xs text-danger">{error}</p> : null
+      ) : (
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Length">
+              <Select className="input" value={String(v.length)} onChange={(e) => change({ length: Number(e.target.value) })}>
+                {[...new Set([12, 16, 20, 24, 32, 40, 64, v.length])]
+                  .sort((a, b) => a - b)
+                  .map((n) => (
+                    <option key={n} value={n}>
+                      {n} characters
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+            <Field label="Approvals wait for" hint="An approved request has to be used within this time.">
+              <Select className="input" value={String(v.request_valid_hours)} onChange={(e) => change({ request_valid_hours: Number(e.target.value) })}>
+                {[...new Set([1, 4, 8, 24, 72, 168, v.request_valid_hours])]
+                  .sort((a, b) => a - b)
+                  .map((n) => (
+                    <option key={n} value={n}>
+                      {n === 168 ? "7 days" : n >= 24 ? `${n / 24} day${n > 24 ? "s" : ""}` : `${n} hour${n > 1 ? "s" : ""}`}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="grid gap-x-6 sm:grid-cols-2">
+            <Switch checked={v.lower} onChange={(x) => change({ lower: x })} label="Lowercase letters" />
+            <Switch checked={v.upper} onChange={(x) => change({ upper: x })} label="Uppercase letters" />
+            <Switch checked={v.digits} onChange={(x) => change({ digits: x })} label="Digits" />
+            <Switch checked={v.symbols} onChange={(x) => change({ symbols: x })} label="Symbols" description="No quotes, spaces, colons or backslashes." />
+            <Switch checked={v.no_ambiguous} onChange={(x) => change({ no_ambiguous: x })} label="Leave out look-alikes" description="0 O o 1 l I |" />
+          </div>
+          {sample && (
+            <p className="break-all text-xs text-subtle">
+              Example: <code className="font-mono text-fg">{sample}</code>
+            </p>
+          )}
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <Button variant="primary" onClick={save} loading={busy}>
+            Save
+          </Button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function PasswordCard() {
   const toast = useToast();
   const qc = useQueryClient();
@@ -1001,6 +1091,7 @@ export default function SettingsPage() {
             <TargetNetworksCard />
             <JumpHostCard />
             <SessionLimitsCard />
+            <VaultPolicyCard />
           </>
         )}
         {tab === "recording" && isAdmin && <RecordingCard />}

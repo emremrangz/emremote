@@ -89,7 +89,7 @@ export function CommandPalette({
     ];
     if (can("files.use")) pages.push(cmd("p-transfer", "SFTP transfer", ArrowLeftRight, go("/transfer"), "files copy upload download"));
     pages.push(cmd("p-methods", "Connection methods", Cable, go("/connections"), "protocols rdp ssh vnc telnet"));
-    if (can("credentials.manage")) pages.push(cmd("p-creds", "Credentials", KeyRound, go("/credentials"), "passwords keys saved"));
+    pages.push(cmd("p-vault", "Vault", KeyRound, go("/vault"), "passwords keys credentials secrets check-out pam"));
     if (isAdmin) pages.push(cmd("p-users", "Users", Users, go("/users"), "teams accounts admin"));
     pages.push(cmd("p-activity", isAdmin ? "Activity log" : "My activity", ScrollText, go("/activity"), "audit history events"));
     pages.push(cmd("p-settings", "Settings", Settings, go("/settings"), "account password two-factor terminal jump hosts"));

@@ -37,8 +37,9 @@ Reasons:
   210 MB, which matters on a 2 GB LXC.
 - **Licensing.** guacd and guacamole-common-js are Apache-2.0. Both are used unmodified.
 
-The trade-off: features the Java application provides, such as session recording playback, file
-browser UI, sharing profiles and LDAP, are not available until emremote implements them.
+The trade-off: features the Java application provides, such as sharing profiles and LDAP, are not
+available until emremote implements them. Session recording, playback and the file browser are implemented
+by emremote itself.
 
 ## Request flow: launching a session
 
@@ -102,6 +103,24 @@ only sees requests that are already authorised. Favorites and last-opened times 
 (`device_user_state`). Each user has a `vault_keys` row: the same data key wrapped with their own
 password.
 
+## Vault
+
+Saved credentials are vault entries (`credentials` plus the columns of migration 0017). Access is
+computed in one SQL expression (`vaultLevelSQL` in `internal/store/pam.go`): `manage` for the owner of a
+private entry and for administrators on shared ones, otherwise the strongest of the user's and their
+team's `vault_grants` (`use` or `reveal`). `internal/api/pam.go` checks that level per request.
+
+- `credential_versions` keeps every sealed value (AAD `credential_version:<id>`), at most 20 per entry.
+- `vault_checkouts` has a partial unique index (one open check-out per entry); `vault_requests` one
+  open request per user and entry.
+- `vaultGate` runs wherever a saved credential is opened for a user (`issueTicket`,
+  `connectionCredentials`) and refuses it without the check-out the policy asks for.
+- `vaultMaintenance` runs every minute from `Background`: it checks in expired check-outs, expires
+  unused approvals and starts due rotations.
+- Rotation (`rotateCredential`) generates a password (`internal/vault`), stores it as an `attempt`
+  version, changes it with `internal/sshhelper/rotate.go` (`passwd` through a PTY, or `chpasswd`), then
+  makes it current and signs in with it to confirm.
+
 ## Backend layout (`app/backend`)
 
 | Package | Responsibility |
@@ -117,7 +136,8 @@ password.
 | `internal/rdpcert` | X.224/TLS negotiation that retrieves an RDP certificate for pinning |
 | `internal/sshkey` | SSH key exchange that retrieves a host key for pinning |
 | `internal/status` | Periodic TCP reachability prober |
-| `internal/sshhelper` | Server-side SSH client (pinned host key required): SFTP file operations, zip streaming, fixed read-only system inspection scripts and their parsers |
+| `internal/sshhelper` | Server-side SSH client (pinned host key required): SFTP file operations, zip streaming, fixed read-only system inspection scripts and their parsers, password rotation with `passwd`/`chpasswd` |
+| `internal/vault` | Password policy and generator, strength estimate, TOTP seed parsing, account name rule |
 | `internal/api` | HTTP handlers, middleware (auth, CSRF, origin, security headers), validation, protocol settings → guacd parameters |
 
 Handlers validate input, call the store, and map errors to JSON responses of the form
@@ -164,5 +184,6 @@ dialogs and menus.
   an owner or ACL table for devices.
 - **More protocols.** guacd also supports Telnet and Kubernetes. Add the protocol to the CHECK
   constraint, `normalizeSettings` and `buildGuacdParams`.
-- **Session recording.** guacd can record sessions (`recording-path`). This would need a volume and a
-  playback UI.
+- **Session recording.** Implemented: guacd writes `recording-path` files to the `recordings` volume, and
+  finished files can be copied to an SMB or NFS share (`internal/remotestore`). See
+  [RECORDING.md](RECORDING.md).

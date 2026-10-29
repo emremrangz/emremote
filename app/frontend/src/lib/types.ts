@@ -238,6 +238,10 @@ export interface Connection extends ConnectionSummary {
   updated_at: string;
 }
 
+export type VaultKind = "login" | "ssh_key" | "api_token" | "note";
+export type AccessPolicy = "open" | "exclusive" | "approval";
+export type VaultAccess = "use" | "reveal" | "manage";
+
 export interface Credential {
   id: string;
   owner_id: string | null;
@@ -249,13 +253,122 @@ export interface Credential {
   usage_count: number;
   created_at: string;
   updated_at: string;
+  kind: VaultKind;
+  folder: string;
+  tags: string[];
+  url: string;
+  description: string;
+  reveal_policy: "allowed" | "never";
+  access_policy: AccessPolicy;
+  max_checkout_minutes: number;
+  break_glass: boolean;
+  rotation_connection_id: string | null;
+  rotate_after_checkin: boolean;
+  rotation_interval_days: number;
+  secret_changed_at: string | null;
+  rotated_at: string | null;
+  rotation_status: "" | "ok" | "unverified" | "failed";
+  rotation_error: string;
+  password_strength: number | null;
+}
+
+export interface VaultCheckout {
+  id: string;
+  credential_id: string;
+  user_id: string | null;
+  username: string;
+  request_id: string | null;
+  reason: string;
+  break_glass: boolean;
+  started_at: string;
+  expires_at: string;
+  checked_in_at: string | null;
+  checked_in_by: string;
+  credential_name?: string;
+}
+
+export interface VaultRequest {
+  id: string;
+  credential_id: string;
+  credential_name: string;
+  user_id: string;
+  username: string;
+  reason: string;
+  minutes: number;
+  status: "pending" | "approved" | "rejected" | "cancelled" | "used" | "expired";
+  decided_by_name: string;
+  decision_note: string;
+  decided_at: string | null;
+  valid_until: string | null;
+  created_at: string;
+}
+
+export interface VaultGrant {
+  user_id: string | null;
+  team_id: string | null;
+  name: string;
+  level: "use" | "reveal";
+}
+
+export interface VaultEntry extends Credential {
+  access: VaultAccess;
+  checkout: VaultCheckout | null;
+  my_request: VaultRequest | null;
+  pending_requests: number;
+  grants?: VaultGrant[];
+}
+
+export interface VaultVersion {
+  id: string;
+  credential_id: string;
+  secret_fields: string[];
+  source: "saved" | "rotated" | "restored" | "attempt";
+  actor_name: string;
+  created_at: string;
+}
+
+export interface VaultEntryDetail {
+  entry: VaultEntry;
+  versions?: VaultVersion[];
+  checkouts?: VaultCheckout[];
+  rotation_connection?: { id: string; name: string };
+}
+
+export interface VaultReveal {
+  fields: Partial<Record<"password" | "private_key" | "passphrase" | "token" | "note", string>>;
+  totp_code?: string;
+  totp_seconds_left?: number;
+}
+
+export interface VaultPolicy {
+  length: number;
+  lower: boolean;
+  upper: boolean;
+  digits: boolean;
+  symbols: boolean;
+  no_ambiguous: boolean;
+  request_valid_hours: number;
+}
+
+export interface VaultHealth {
+  total: number;
+  weak: string[];
+  reused: string[][];
+  overdue: string[];
+  old: string[];
+  rotation_failed: string[];
+  no_secret: string[];
+  score: number;
 }
 
 export interface SecretInput {
-  mode: "keep" | "set" | "clear";
+  mode: "keep" | "set" | "merge" | "clear";
   password?: string;
   private_key?: string;
   passphrase?: string;
+  token?: string;
+  note?: string;
+  totp?: string;
 }
 
 export interface AuditEvent {

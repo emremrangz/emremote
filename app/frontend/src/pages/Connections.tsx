@@ -1,20 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cable, KeyRound, Pencil, Play, Plus, Search, Trash2 } from "lucide-react";
-import { useConnections, useCredentials, useInvalidateInventory } from "@/hooks/queries";
+import { Cable, Pencil, Play, Search } from "lucide-react";
+import { useConnections } from "@/hooks/queries";
 import { PageHeader, EmptyState, ErrorState, Badge } from "@/components/ui/misc";
 import { PageLoader } from "@/components/ui/Spinner";
 import { Button } from "@/components/ui/Button";
 import { OsIcon } from "@/components/OsIcon";
 import { ConnectionStatusDot, ProtocolBadge } from "@/components/Status";
 import { ConnectionFormDialog } from "@/components/ConnectionForm";
-import { CredentialFormDialog } from "@/components/CredentialForm";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import type { Connection, Credential, RDPSettings, SSHSettings } from "@/lib/types";
+import type { Connection, RDPSettings, SSHSettings } from "@/lib/types";
 import { relativeTime } from "@/lib/format";
 import { launchConnection } from "@/lib/launch";
 import { useAccess } from "@/lib/auth";
-import { del } from "@/lib/api";
 
 function authLabel(c: Connection) {
   if (c.credential_id) return <Badge tone="accent">{c.credential_name}</Badge>;
@@ -120,79 +117,6 @@ function ConnectionsTab() {
       </div>
       <ConnectionFormDialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)} deviceId={editing?.device_id ?? ""} connection={editing ?? undefined} />
     </div>
-  );
-}
-
-export function CredentialsTab() {
-  const { can } = useAccess();
-  const { data, isLoading, error, refetch } = useCredentials();
-  const invalidate = useInvalidateInventory();
-  const [form, setForm] = useState<{ open: boolean; credential?: Credential }>({ open: false });
-  const [deleting, setDeleting] = useState<Credential | null>(null);
-  if (isLoading) return <PageLoader />;
-  if (error) return <ErrorState error={error} onRetry={refetch} />;
-  return (
-    <>
-      <div className="card overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <p className="text-sm text-muted">Logins you can reuse in connections. Secrets are write-only.</p>
-          {can("credentials.manage") && (
-            <Button variant="primary" size="sm" icon={<Plus className="h-3.5 w-3.5" />} onClick={() => setForm({ open: true })}>
-              New credential
-            </Button>
-          )}
-        </div>
-        {data!.length === 0 ? (
-          <EmptyState icon={<KeyRound className="h-5 w-5" />} title="No saved credentials">
-            Create a credential once (for example a local admin account) and reuse it across several devices.
-          </EmptyState>
-        ) : (
-          <ul className="divide-y divide-border">
-            {data!.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-2 text-muted">
-                  <KeyRound className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{c.name}</p>
-                  <p className="text-xs text-subtle">
-                    {c.username ? `${c.domain ? c.domain + "\\" : ""}${c.username}` : "no username"} ·{" "}
-                    {c.secret_fields.length ? c.secret_fields.join(", ").replace("_", " ") : "no secret"}
-                  </p>
-                </div>
-                <span className="text-xs text-subtle">used by {c.usage_count}</span>
-                {c.can_manage && (
-                  <>
-                    <Button size="icon-sm" variant="ghost" aria-label={`Edit ${c.name}`} onClick={() => setForm({ open: true, credential: c })}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="icon-sm" variant="ghost" aria-label={`Delete ${c.name}`} onClick={() => setDeleting(c)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <CredentialFormDialog open={form.open} onOpenChange={(o) => setForm((s) => ({ ...s, open: o }))} credential={form.credential} />
-      <ConfirmDialog
-        open={!!deleting}
-        onOpenChange={(o) => !o && setDeleting(null)}
-        title={`Delete credential ${deleting?.name ?? ""}?`}
-        onConfirm={async () => {
-          await del(`/api/credentials/${deleting!.id}`);
-          await invalidate();
-        }}
-      >
-        <p>
-          {deleting?.usage_count
-            ? `${deleting.usage_count} connection(s) use this credential; they will fall back to asking for credentials when connecting.`
-            : "No connections use this credential."}
-        </p>
-      </ConfirmDialog>
-    </>
   );
 }
 

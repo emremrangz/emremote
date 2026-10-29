@@ -14,6 +14,9 @@ import type {
   UserRow,
   Snippet,
   Statistics,
+  VaultEntry,
+  VaultPolicy,
+  VaultRequest,
 } from "@/lib/types";
 
 export const keys = {
@@ -23,6 +26,8 @@ export const keys = {
   connections: ["connections"] as const,
   connection: (id: string) => ["connections", id] as const,
   credentials: ["credentials"] as const,
+  vault: ["vault"] as const,
+  vaultRequests: ["vault", "requests"] as const,
   dashboard: ["dashboard"] as const,
   audit: (params: string) => ["audit", params] as const,
   system: ["system"] as const,
@@ -51,6 +56,12 @@ export const useConnection = (id: string) =>
   useQuery({ queryKey: keys.connection(id), queryFn: () => get<Connection>(connectionBase(id)), retry: isQuickConnection(id) ? false : 3 });
 export const useCredentials = () =>
   useQuery({ queryKey: keys.credentials, queryFn: () => get<Credential[]>("/api/credentials") });
+export const useVault = () =>
+  useQuery({ queryKey: keys.vault, queryFn: () => get<VaultEntry[]>("/api/vault"), refetchInterval: 30_000 });
+export const useVaultRequests = () =>
+  useQuery({ queryKey: keys.vaultRequests, queryFn: () => get<VaultRequest[]>("/api/vault/requests"), refetchInterval: 30_000 });
+export const useVaultPolicy = () =>
+  useQuery({ queryKey: ["vault-policy"], queryFn: () => get<VaultPolicy>("/api/vault/policy"), staleTime: 60_000 });
 export const useDashboard = () =>
   useQuery({ queryKey: keys.dashboard, queryFn: () => get<Dashboard>("/api/dashboard"), refetchInterval: 15_000 });
 export const useStatistics = (days: number) =>
@@ -87,6 +98,7 @@ export function useInvalidateInventory() {
       qc.invalidateQueries({ queryKey: keys.groups }),
       qc.invalidateQueries({ queryKey: keys.connections }),
       qc.invalidateQueries({ queryKey: keys.credentials }),
+      qc.invalidateQueries({ queryKey: keys.vault }),
       qc.invalidateQueries({ queryKey: keys.dashboard }),
     ]);
 }

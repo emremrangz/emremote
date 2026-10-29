@@ -409,13 +409,13 @@ export default function StatisticsPage() {
             </Link>
           </>
         ) : (
-          <Link to="/credentials" className="card flex items-center gap-4 p-5 transition-colors hover:border-border-strong">
+          <Link to="/vault" className="card flex items-center gap-4 p-5 transition-colors hover:border-border-strong">
             <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-muted">
               <KeyRound className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-[13px] font-medium">Saved credentials</p>
-              <p className="mt-0.5 text-xs text-subtle">Manage them on the Credentials page</p>
+              <p className="text-[13px] font-medium">Vault</p>
+              <p className="mt-0.5 text-xs text-subtle">Passwords, keys and check-outs</p>
             </div>
           </Link>
         )}

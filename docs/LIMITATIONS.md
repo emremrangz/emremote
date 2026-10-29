@@ -2,11 +2,15 @@
 
 - Users have two roles (administrator, member) with a fixed set of permissions; there is no
   fine-grained per-device permission and no SSO (OIDC/SAML) yet. Two-factor is TOTP only.
+- Vault password rotation works on Linux and Unix accounts over SSH only, not through jump hosts, and
+  not for Windows, network equipment or databases. Vault requests have no e-mail notifications. See
+  [VAULT.md](VAULT.md#limits).
 - No agent, so emremote cannot detect logged-in users or device health. Status means only "the
   service port accepted a TCP connection".
 - RDP file exchange goes through the transfer drive, not the whole Windows disk; full disk access
-  and system information need SSH (Windows' optional OpenSSH Server). Session recording is not
-  implemented. Multi-monitor sessions are not possible: the gateway (guacd 1.6) offers one screen.
+  and system information need SSH (Windows' optional OpenSSH Server). Session recordings capture
+  the screen and mouse only, never the keyboard, and are played back in the browser; see
+  [RECORDING.md](RECORDING.md) for what was and was not tested. Multi-monitor sessions are not possible: the gateway (guacd 1.6) offers one screen.
 - **Not yet verified on real hardware:** RDP printing, microphone, RemoteApp and Hyper-V VMConnect
   settings (they are validated, stored and passed to the gateway), and Wake-on-LAN delivery from
   inside Docker's network. Treat them as experimental and report what you find.

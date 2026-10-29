@@ -199,7 +199,7 @@ func (s *Server) handleOpenSSHAccess(w http.ResponseWriter, r *http.Request) {
 	}
 	username, material, credErr := s.connectionCredentials(r.Context(), c)
 	if credErr != nil {
-		writeError(w, http.StatusInternalServerError, "secret_unavailable", credErr.Error())
+		writeVaultGateError(w, credErr)
 		return
 	}
 	// Credentials typed by the user are used once for this access session and never stored.
@@ -256,6 +256,9 @@ func (s *Server) connectionCredentials(ctx context.Context, c *store.Connection)
 	}
 	if c.CredentialID != nil {
 		if cred, err := s.store.GetCredential(ctx, *c.CredentialID); err == nil {
+			if gerr := s.vaultGate(ctx, cred); gerr != nil {
+				return "", material, gerr
+			}
 			cm, err := s.box.OpenMaterial("credential", cred.ID, cred.SecretEnc)
 			if err != nil {
 				return "", material, errors.New("stored credential could not be decrypted (was EMREMOTE_ENCRYPTION_KEY changed?)")

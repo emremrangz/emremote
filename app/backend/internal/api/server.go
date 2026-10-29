@@ -154,6 +154,7 @@ func (s *Server) Background(ctx context.Context) {
 			return
 		case <-tunnels.C:
 			s.syncTunnelSessions(ctx)
+			go s.vaultMaintenance(ctx)
 			s.access.sweep()
 			s.copies.prune()
 			s.quick.sweep()
@@ -316,6 +317,24 @@ func (s *Server) Handler() http.Handler {
 	a("POST /api/credentials", s.withPerm(creds, s.handleCreateCredential))
 	a("PUT /api/credentials/{id}", s.credential(s.handleUpdateCredential))
 	a("DELETE /api/credentials/{id}", s.credential(s.handleDeleteCredential))
+
+	// Privileged access vault (access is checked per entry, see pam.go).
+	a("GET /api/vault", s.handleListVault)
+	a("GET /api/vault/policy", s.handleGetVaultPolicy)
+	a("GET /api/vault/health", s.handleVaultHealth)
+	a("GET /api/vault/requests", s.handleListVaultRequests)
+	a("POST /api/vault/requests/{rid}/approve", s.adminOnly(s.handleDecideVaultRequest(true)))
+	a("POST /api/vault/requests/{rid}/reject", s.adminOnly(s.handleDecideVaultRequest(false)))
+	a("DELETE /api/vault/requests/{rid}", s.handleCancelVaultRequest)
+	a("GET /api/vault/{id}", s.handleGetVaultEntry)
+	a("POST /api/vault/{id}/reveal", s.handleRevealVault)
+	a("POST /api/vault/{id}/checkout", s.handleCheckoutVault)
+	a("POST /api/vault/{id}/checkin", s.handleCheckinVault)
+	a("POST /api/vault/{id}/requests", s.handleCreateVaultRequest)
+	a("PUT /api/vault/{id}/grants", s.adminOnly(s.handleSetVaultGrants))
+	a("POST /api/vault/{id}/versions/{vid}/restore", s.handleRestoreVersion)
+	a("POST /api/vault/{id}/rotate", s.handleRotateVault)
+	a("PUT /api/settings/vault", s.adminOnly(s.handleSetVaultPolicy))
 
 	a("GET /api/snippets", s.withPerm(connect, s.handleListSnippets))
 	a("POST /api/snippets", s.withPerm(connect, s.handleCreateSnippet))

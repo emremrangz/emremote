@@ -15,21 +15,31 @@ import (
 	"github.com/emremrangz/emremote/internal/secrets"
 	"github.com/emremrangz/emremote/internal/sshkey"
 	"github.com/emremrangz/emremote/internal/store"
+	"github.com/emremrangz/emremote/internal/vault"
 )
 
 // secretInput is write-only secret material in requests.
 //
 //	mode "keep"  (default) leaves stored secrets unchanged
 //	mode "set"   replaces stored secrets with the supplied fields
+//	mode "merge" (vault entries) replaces only the supplied, non-empty fields
 //	mode "clear" removes stored secrets
 type secretInput struct {
 	Mode       string `json:"mode"`
 	Password   string `json:"password"`
 	PrivateKey string `json:"private_key"`
 	Passphrase string `json:"passphrase"`
+	// Vault entries only.
+	Token string `json:"token"`
+	Note  string `json:"note"`
+	TOTP  string `json:"totp"`
 }
 
 func (in *secretInput) validate(v *validator, allowKey bool) (change bool, m secrets.Material) {
+	return in.validateWith(v, allowKey, false)
+}
+
+func (in *secretInput) validateWith(v *validator, allowKey, allowVault bool) (change bool, m secrets.Material) {
 	if in == nil || in.Mode == "" || in.Mode == "keep" {
 		return false, m
 	}
@@ -37,9 +47,31 @@ func (in *secretInput) validate(v *validator, allowKey bool) (change bool, m sec
 	case "clear":
 		return true, m
 	case "set":
+	case "merge":
+		if !allowVault {
+			v.fail("secret.mode", "Must be keep, set or clear")
+			return false, m
+		}
 	default:
 		v.fail("secret.mode", "Must be keep, set or clear")
 		return false, m
+	}
+	if !allowVault && (in.Token != "" || in.Note != "" || in.TOTP != "") {
+		v.fail("secret", "Tokens, notes and one-time codes belong to vault entries")
+		return false, m
+	}
+	if len(in.Token) > 8192 || strings.ContainsRune(in.Token, 0) {
+		v.fail("secret.token", "Token is too long (8 KB at most) or contains invalid characters")
+	}
+	if len(in.Note) > 16384 || strings.ContainsRune(in.Note, 0) {
+		v.fail("secret.note", "Note is too long (16 KB at most)")
+	}
+	totp := ""
+	if strings.TrimSpace(in.TOTP) != "" {
+		var err error
+		if totp, err = vault.ParseTOTP(in.TOTP); err != nil {
+			v.fail("secret.totp", "One-time code secret "+err.Error())
+		}
 	}
 	if len(in.Password) > 1024 || strings.ContainsRune(in.Password, 0) {
 		v.fail("secret.password", "Password is too long or contains invalid characters")
@@ -57,7 +89,7 @@ func (in *secretInput) validate(v *validator, allowKey bool) (change bool, m sec
 			key = normal
 		}
 	}
-	return true, secrets.Material{Password: in.Password, PrivateKey: key, Passphrase: in.Passphrase}
+	return true, secrets.Material{Password: in.Password, PrivateKey: key, Passphrase: in.Passphrase, Token: in.Token, Note: in.Note, TOTP: totp}
 }
 
 type connectionRequest struct {
@@ -369,6 +401,19 @@ type credentialRequest struct {
 	Username string       `json:"username"`
 	Domain   string       `json:"domain"`
 	Secret   *secretInput `json:"secret"`
+	// Vault settings; a field left out keeps its current value (or the default).
+	Kind                 *string   `json:"kind"`
+	Folder               *string   `json:"folder"`
+	Tags                 *[]string `json:"tags"`
+	URL                  *string   `json:"url"`
+	Description          *string   `json:"description"`
+	RevealPolicy         *string   `json:"reveal_policy"`
+	AccessPolicy         *string   `json:"access_policy"`
+	MaxCheckoutMinutes   *int      `json:"max_checkout_minutes"`
+	BreakGlass           *bool     `json:"break_glass"`
+	RotationConnectionID *string   `json:"rotation_connection_id"`
+	RotateAfterCheckin   *bool     `json:"rotate_after_checkin"`
+	RotationIntervalDays *int      `json:"rotation_interval_days"`
 }
 
 func (s *Server) handleListCredentials(w http.ResponseWriter, r *http.Request) {
@@ -384,13 +429,85 @@ func (s *Server) handleListCredentials(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
-func (req credentialRequest) validate() (*validator, bool, secrets.Material, credentialRequest) {
+// newVaultFields are the settings of a new entry before the request applies its own.
+func newVaultFields() store.VaultFields {
+	return store.VaultFields{Kind: "login", Tags: []string{}, RevealPolicy: "allowed", AccessPolicy: "open", MaxCheckoutMinutes: 60, BreakGlass: true}
+}
+
+// validate checks the request against the entry's owner; cur holds the current
+// settings (or the defaults for a new entry) and is updated in place.
+func (s *Server) validateCredential(ctx context.Context, req *credentialRequest, owner *string, cur *store.VaultFields) (*validator, bool, secrets.Material) {
 	v := newValidator()
 	req.Name = v.text("name", req.Name, true, 128, false)
 	req.Username = v.text("username", req.Username, false, 256, false)
 	req.Domain = v.text("domain", req.Domain, false, 256, false)
-	change, m := req.Secret.validate(v, true)
-	return v, change, m, req
+	change, m := req.Secret.validateWith(v, true, true)
+	if req.Kind != nil {
+		cur.Kind = v.oneOf("kind", *req.Kind, "login", "ssh_key", "api_token", "note")
+	}
+	if req.Folder != nil {
+		cur.Folder = strings.Trim(v.text("folder", *req.Folder, false, 128, false), "/ ")
+	}
+	if req.Tags != nil {
+		cur.Tags = v.tags("tags", *req.Tags)
+	}
+	if req.URL != nil {
+		cur.URL = v.text("url", *req.URL, false, 512, false)
+		if low := strings.ToLower(cur.URL); cur.URL != "" && !strings.HasPrefix(low, "https://") && !strings.HasPrefix(low, "http://") {
+			v.fail("url", "Must start with https:// or http://")
+		}
+	}
+	if req.Description != nil {
+		cur.Description = v.text("description", *req.Description, false, 1000, true)
+	}
+	if req.RevealPolicy != nil {
+		cur.RevealPolicy = v.oneOf("reveal_policy", *req.RevealPolicy, "allowed", "never")
+	}
+	if req.AccessPolicy != nil {
+		cur.AccessPolicy = v.oneOf("access_policy", *req.AccessPolicy, "open", "exclusive", "approval")
+	}
+	if owner != nil && cur.AccessPolicy != "open" {
+		v.fail("access_policy", "Check-outs and approvals are for shared entries; your own entries are always open to you")
+	}
+	if req.MaxCheckoutMinutes != nil {
+		cur.MaxCheckoutMinutes = *req.MaxCheckoutMinutes
+		if cur.MaxCheckoutMinutes < 5 || cur.MaxCheckoutMinutes > 1440 {
+			v.fail("max_checkout_minutes", "Must be between 5 minutes and 24 hours")
+		}
+	}
+	if req.BreakGlass != nil {
+		cur.BreakGlass = *req.BreakGlass
+	}
+	if req.RotateAfterCheckin != nil {
+		cur.RotateAfterCheckin = *req.RotateAfterCheckin
+	}
+	if req.RotationIntervalDays != nil {
+		cur.RotationIntervalDays = *req.RotationIntervalDays
+		if cur.RotationIntervalDays < 0 || cur.RotationIntervalDays > 3650 {
+			v.fail("rotation_interval_days", "Must be between 0 (never) and 3650 days")
+		}
+	}
+	if req.RotationConnectionID != nil {
+		if *req.RotationConnectionID == "" {
+			cur.RotationConnectionID = nil
+		} else {
+			cur.RotationConnectionID = v.optionalUUID("rotation_connection_id", req.RotationConnectionID)
+		}
+	}
+	if cur.RotationConnectionID != nil {
+		if msg := s.rotationTargetProblem(ctx, *cur.RotationConnectionID, owner); msg != "" {
+			v.fail("rotation_connection_id", msg)
+		}
+		if cur.Kind != "login" {
+			v.fail("rotation_connection_id", "Only sign-in entries (username and password) can be rotated")
+		}
+		if !vault.ValidAccount(req.Username) {
+			v.fail("username", "Rotation needs a Unix account name (letters, digits, . _ -)")
+		}
+	} else if cur.RotateAfterCheckin {
+		v.fail("rotate_after_checkin", "Choose the SSH connection used to change the password first")
+	}
+	return v, change, m
 }
 
 func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) {
@@ -398,27 +515,41 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	v, _, m, req := req.validate()
+	u := userFrom(r.Context())
+	owner := u.OwnerScope()
+	vf := newVaultFields()
+	v, _, m := s.validateCredential(r.Context(), &req, owner, &vf)
 	if !v.ok() {
 		writeValidation(w, v)
 		return
 	}
-	c, err := s.store.CreateCredential(r.Context(), userFrom(r.Context()).OwnerScope(), req.Name, req.Username, req.Domain, func(id string) ([]byte, []string, error) {
+	vf.PasswordStrength = strengthOf(m)
+	var versionCT []byte
+	versionID := newUUID()
+	c, err := s.store.CreateCredential(r.Context(), owner, req.Name, req.Username, req.Domain, vf, func(id string) ([]byte, []string, error) {
 		ct, err := s.box.SealMaterial("credential", id, m)
+		if err == nil && !m.Empty() {
+			versionCT, err = s.box.SealMaterial("credential_version", versionID, m)
+		}
 		return ct, m.Fields(), err
 	})
 	if err != nil {
 		writeStoreError(w, r, err, "Credential")
 		return
 	}
+	if versionCT != nil {
+		s.addVersion(r.Context(), c.ID, versionID, versionCT, m.Fields(), "saved", u.Username)
+	}
 	c.CanManage = true
-	s.audit(r, "credential.create", "credential", c.ID, c.Name, true, map[string]any{"stored_secrets": c.SecretFields})
+	s.audit(r, "credential.create", "credential", c.ID, c.Name, true, map[string]any{"stored_secrets": c.SecretFields,
+		"kind": c.Kind, "access_policy": c.AccessPolicy, "reveal_policy": c.RevealPolicy})
 	writeJSON(w, http.StatusCreated, c)
 }
 
 func (s *Server) handleUpdateCredential(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, err := s.store.GetCredential(r.Context(), id); err != nil {
+	old, err := s.store.GetCredential(r.Context(), id)
+	if err != nil {
 		writeStoreError(w, r, err, "Credential")
 		return
 	}
@@ -426,31 +557,38 @@ func (s *Server) handleUpdateCredential(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	v, change, m, req := req.validate()
+	vf := old.VaultFields
+	v, change, m := s.validateCredential(r.Context(), &req, old.OwnerID, &vf)
 	if !v.ok() {
 		writeValidation(w, v)
 		return
 	}
-	c, err := s.store.UpdateCredential(r.Context(), id, req.Name, req.Username, req.Domain)
+	if change && req.Secret.Mode == "merge" {
+		cur, err := s.box.OpenMaterial("credential", id, old.SecretEnc)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "secret_unavailable", "The stored secret could not be decrypted, so it cannot be merged. Replace it instead.")
+			return
+		}
+		m = mergeMaterial(cur, m)
+	}
+	c, err := s.store.UpdateCredential(r.Context(), id, req.Name, req.Username, req.Domain, vf)
 	if err != nil {
 		writeStoreError(w, r, err, "Credential")
 		return
 	}
 	if change {
-		ct, err := s.box.SealMaterial("credential", id, m)
-		if err == nil {
-			err = s.store.SetCredentialSecret(r.Context(), id, ct, m.Fields())
+		if err := s.replaceCredentialSecret(r.Context(), c, m, "saved", userFrom(r.Context()).Username); err != nil {
+			writeStoreError(w, r, err, "Credential")
+			return
 		}
-		if err == nil {
-			c, err = s.store.GetCredential(r.Context(), id)
-		}
-		if err != nil {
+		if c, err = s.store.GetCredential(r.Context(), id); err != nil {
 			writeStoreError(w, r, err, "Credential")
 			return
 		}
 	}
 	c.CanManage = true
-	s.audit(r, "credential.update", "credential", c.ID, c.Name, true, map[string]any{"secret_changed": change})
+	s.audit(r, "credential.update", "credential", c.ID, c.Name, true, map[string]any{"secret_changed": change,
+		"changed": credentialChanges(old, c)})
 	writeJSON(w, http.StatusOK, c)
 }
 
@@ -461,12 +599,42 @@ func (s *Server) handleDeleteCredential(w http.ResponseWriter, r *http.Request) 
 		writeStoreError(w, r, err, "Credential")
 		return
 	}
+	if k, _ := s.store.OpenCheckout(r.Context(), id); k != nil {
+		writeError(w, http.StatusConflict, "checked_out", "This entry is checked out by "+k.Username+". Check it in first.")
+		return
+	}
 	if err := s.store.DeleteCredential(r.Context(), id); err != nil {
 		writeStoreError(w, r, err, "Credential")
 		return
 	}
 	s.audit(r, "credential.delete", "credential", c.ID, c.Name, true, map[string]any{"connections_affected": c.UsageCount})
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// credentialChanges names the vault settings that differ (for the audit log).
+func credentialChanges(a, b *store.Credential) []string {
+	out := []string{}
+	add := func(name string, changed bool) {
+		if changed {
+			out = append(out, name)
+		}
+	}
+	add("name", a.Name != b.Name)
+	add("username", a.Username != b.Username)
+	add("domain", a.Domain != b.Domain)
+	add("kind", a.Kind != b.Kind)
+	add("folder", a.Folder != b.Folder)
+	add("tags", strings.Join(a.Tags, ",") != strings.Join(b.Tags, ","))
+	add("url", a.URL != b.URL)
+	add("description", a.Description != b.Description)
+	add("reveal_policy", a.RevealPolicy != b.RevealPolicy)
+	add("access_policy", a.AccessPolicy != b.AccessPolicy)
+	add("max_checkout_minutes", a.MaxCheckoutMinutes != b.MaxCheckoutMinutes)
+	add("break_glass", a.BreakGlass != b.BreakGlass)
+	add("rotation_connection", !sameOwner(a.RotationConnectionID, b.RotationConnectionID))
+	add("rotate_after_checkin", a.RotateAfterCheckin != b.RotateAfterCheckin)
+	add("rotation_interval_days", a.RotationIntervalDays != b.RotationIntervalDays)
+	return out
 }
 
 // handleSetKeyboardLayout lets anyone who can open a connection pick the keyboard

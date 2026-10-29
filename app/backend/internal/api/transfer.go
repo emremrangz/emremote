@@ -235,6 +235,10 @@ func (s *Server) handleAutoSSH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username, material, err := s.connectionCredentials(r.Context(), source)
+	if g := (errVaultCheckout{}); errors.As(err, &g) {
+		writeVaultGateError(w, err)
+		return
+	}
 	if err != nil || username == "" || material.Password == "" {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "needs_credentials"})
 		return

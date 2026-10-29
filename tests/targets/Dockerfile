@@ -2,7 +2,11 @@
 # servers, used to validate emremote end to end. Never use in production.
 FROM alpine:3.22
 RUN apk add --no-cache xrdp xorgxrdp xorg-server xvfb x11vnc xterm openbox openssh-server \
-      font-dejavu xsetroot dbus-x11 setxkbmap bash shadow procps busybox-extras
+      font-dejavu xsetroot dbus-x11 setxkbmap bash shadow procps busybox-extras sudo
+# svc and svc2 are service accounts whose passwords the vault rotation tests change: svc changes its
+# own password with passwd, svc2's is set by tester through sudo chpasswd (the only command tester may sudo).
+RUN adduser -D -s /bin/sh svc && adduser -D -s /bin/sh svc2 \
+ && echo 'tester ALL=(root) /usr/sbin/chpasswd' > /etc/sudoers.d/rotation && chmod 440 /etc/sudoers.d/rotation
 RUN adduser -D -s /bin/bash tester \
  && ssh-keygen -A \
  && sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config \

@@ -474,7 +474,7 @@ func (s *Server) handleListAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 var knownActionFilters = []string{
-	"auth.", "device.", "group.", "settings.", "connection.", "credential.", "session.", "file.", "ssh.", "user.", "team.", "inventory.", "snippet.", "system.", "recording.",
+	"auth.", "device.", "group.", "settings.", "connection.", "credential.", "session.", "file.", "ssh.", "user.", "team.", "inventory.", "snippet.", "system.", "recording.", "vault.",
 	"auth.login", "auth.logout", "auth.setup", "auth.password_change", "auth.password_reset", "auth.sessions_revoked",
 	"session.start", "session.end", "session.terminate", "connection.identity_pinned",
 }

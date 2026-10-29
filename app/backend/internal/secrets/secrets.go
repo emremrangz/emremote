@@ -165,6 +165,10 @@ type Material struct {
 	Password   string `json:"password,omitempty"`
 	PrivateKey string `json:"private_key,omitempty"`
 	Passphrase string `json:"passphrase,omitempty"`
+	// Vault entries only: an API token, a secure note and a TOTP seed (base32).
+	Token string `json:"token,omitempty"`
+	Note  string `json:"note,omitempty"`
+	TOTP  string `json:"totp,omitempty"`
 }
 
 // Fields lists the non-empty fields, for reporting presence without values.
@@ -178,6 +182,15 @@ func (m Material) Fields() []string {
 	}
 	if m.Passphrase != "" {
 		f = append(f, "passphrase")
+	}
+	if m.Token != "" {
+		f = append(f, "token")
+	}
+	if m.Note != "" {
+		f = append(f, "note")
+	}
+	if m.TOTP != "" {
+		f = append(f, "totp")
 	}
 	sort.Strings(f)
 	return f

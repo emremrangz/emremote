@@ -41,6 +41,20 @@ shown), pick a keyboard layout, and mark them as personal favorites.
 A member cannot use a shared credential on their own devices: that would let them point an
 administrator's password at a host they control.
 
+## The vault
+
+Saved credentials live in the **Vault** (sidebar). Members see their own entries plus the shared entries
+an administrator shared with them (open the entry, **Shared with**):
+
+| Access | Allows |
+|---|---|
+| **Use** | See the entry, check it out or request it, and connect with it without seeing the secret |
+| **Use and show** | Also show and copy the secret, with a reason, if the entry allows showing |
+
+Shared entries can need a **check-out** (one person at a time) or an **approval** (members request access,
+another administrator approves). Administrators check out directly but still need the check-out to
+connect while the policy is on. Details: [VAULT.md](VAULT.md).
+
 ## Everyday tasks
 
 - **Add a person:** Users → New user. Choose a username and a password (Generate makes a strong one),

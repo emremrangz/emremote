@@ -25,7 +25,7 @@ import {
 import { useAccess, useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "./ui/Menu";
-import { useActiveSessions, useDevices, useGroups, useSystem } from "@/hooks/queries";
+import { useActiveSessions, useDevices, useGroups, useSystem, useVaultRequests } from "@/hooks/queries";
 import { GroupsDialog } from "./GroupsDialog";
 import { CommandPalette } from "./CommandPalette";
 import { GithubButton, SponsorButton } from "./GithubButton";
@@ -110,6 +110,9 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: 
   const groupParam = onDevices ? params.get("group") : null;
   const all = devices.data ?? [];
   const ungrouped = all.filter((d) => d.groups.length === 0).length;
+  // Administrators see how many vault requests wait for a decision.
+  const requests = useVaultRequests();
+  const vaultWaiting = isAdmin ? (requests.data ?? []).filter((r) => r.status === "pending").length : 0;
 
   return (
     <>
@@ -188,7 +191,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate?: () => void; onSearch: 
         <Section title="Access">
           {can("files.use") && <NavItem to="/transfer" icon={ArrowLeftRight} label="SFTP transfer" onNavigate={onNavigate} />}
           <NavItem to="/connections" icon={Cable} label="Connection methods" onNavigate={onNavigate} />
-          {can("credentials.manage") && <NavItem to="/credentials" icon={KeyRound} label="Credentials" onNavigate={onNavigate} />}
+          <NavItem to="/vault" icon={KeyRound} label="Vault" count={vaultWaiting || undefined} onNavigate={onNavigate} />
         </Section>
 
         <Section title={isAdmin ? "Administration" : "Account"}>

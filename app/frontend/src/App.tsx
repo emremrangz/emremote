@@ -11,7 +11,7 @@ import OverviewPage from "./pages/Overview";
 import DevicesPage from "./pages/Devices";
 import DeviceDetailPage from "./pages/DeviceDetail";
 import ConnectionsPage from "./pages/Connections";
-import CredentialsPage from "./pages/Credentials";
+import VaultPage from "./pages/Vault";
 import ActivityPage from "./pages/Activity";
 import SettingsPage from "./pages/Settings";
 import TransferPage from "./pages/Transfer";
@@ -73,7 +73,8 @@ export default function App() {
         <Route path="users" element={<Require admin><UsersPage /></Require>} />
         <Route path="transfer" element={<Require perm="files.use"><TransferPage /></Require>} />
         <Route path="connections" element={<ConnectionsPage />} />
-        <Route path="credentials" element={<CredentialsPage />} />
+        <Route path="vault" element={<VaultPage />} />
+        <Route path="credentials" element={<Navigate to="/vault" replace />} />
         <Route path="recordings" element={<RecordingsPage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="settings" element={<SettingsPage />} />

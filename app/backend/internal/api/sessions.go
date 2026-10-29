@@ -353,6 +353,12 @@ func (s *Server) issueTicket(w http.ResponseWriter, r *http.Request, req session
 	if c.CredentialID != nil {
 		cred, err := s.store.GetCredential(r.Context(), *c.CredentialID)
 		if err == nil {
+			if gerr := s.vaultGate(r.Context(), cred); gerr != nil {
+				s.audit(r, "session.start", "connection", c.ID, c.DeviceName+" / "+c.Name, false,
+					map[string]any{"protocol": c.Protocol, "reason": "vault check-out required", "credential": cred.Name})
+				writeVaultGateError(w, gerr)
+				return
+			}
 			credName = cred.Name
 			cm, err := s.box.OpenMaterial("credential", cred.ID, cred.SecretEnc)
 			if err != nil {

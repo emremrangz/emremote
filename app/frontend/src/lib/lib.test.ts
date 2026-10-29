@@ -6,6 +6,7 @@ import { searchCities } from "./cities";
 import { distroOf } from "../components/OsIcon";
 import { duration, relativeTime } from "./format";
 import { statusMessage } from "./guac";
+import { durationLabel, generatePassword } from "./vault";
 import { deviceReachability } from "../components/Status";
 import type { ConnectionSummary } from "./types";
 
@@ -144,5 +145,28 @@ describe("operating system logos", () => {
     expect(distroOf("Proxmox VE 9.0.3 (Debian GNU/Linux 13 (trixie))")?.name).toBe("Proxmox");
     expect(distroOf("Debian GNU/Linux 13 (trixie)")?.name).toBe("Debian");
     expect(distroOf("Ubuntu 24.04.5 LTS")?.name).toBe("Ubuntu");
+  });
+});
+
+describe("vault password generator", () => {
+  it("follows the policy and avoids characters that break chpasswd or shells", () => {
+    const policy = { length: 20, lower: true, upper: false, digits: true, symbols: true, no_ambiguous: true, request_valid_hours: 8 };
+    for (let i = 0; i < 200; i++) {
+      const pw = generatePassword(policy);
+      expect(pw).toHaveLength(20);
+      expect(pw).not.toMatch(/[A-Z]/);
+      expect(pw).toMatch(/[a-z]/);
+      expect(pw).toMatch(/[2-9]/);
+      expect(pw).not.toMatch(/[0Oo1lI|:'"\\` ]/);
+    }
+  });
+  it("falls back to the default policy when nothing is chosen", () => {
+    const pw = generatePassword({ length: 30, lower: false, upper: false, digits: false, symbols: false, no_ambiguous: false, request_valid_hours: 8 });
+    expect(pw).toHaveLength(24);
+  });
+  it("labels durations", () => {
+    expect(durationLabel(45)).toBe("45 min");
+    expect(durationLabel(150)).toBe("2 h 30 min");
+    expect(durationLabel(1440)).toBe("24 h");
   });
 });

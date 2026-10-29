@@ -61,7 +61,7 @@ await page.evaluate(async () => {
   for (const d of await (await fetch("/api/devices")).json())
     if (d.name === "Lab workstation" || d.name === "Core switch") await fetch(`/api/devices/${d.id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } });
   for (const cr of await (await fetch("/api/credentials")).json())
-    if (cr.name === "Lab tester") await fetch(`/api/credentials/${cr.id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } });
+    if (cr.name === "Lab tester" || cr.name === "UI vault entry") await fetch(`/api/credentials/${cr.id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } });
   for (const sn of await (await fetch("/api/snippets")).json())
     await fetch(`/api/snippets/${sn.id}`, { method: "DELETE", headers: { "X-CSRF-Token": csrf } });
   for (const u of await (await fetch("/api/users")).json())
@@ -1087,7 +1087,7 @@ await page.evaluate(async (ids) => {
   await mp.waitForTimeout(600);
   await shot("24-member-overview", mp);
   const navText = await mp.getByRole("navigation", { name: "Main" }).innerText();
-  check("a member's menu hides administration and features they do not have", !/Users/.test(navText) && !/Credentials/.test(navText) && /SFTP transfer/.test(navText) && /My activity/.test(navText), navText.replace(/\s+/g, " ").slice(0, 160));
+  check("a member's menu hides administration and features they do not have", !/Users/.test(navText) && /Vault/.test(navText) && /SFTP transfer/.test(navText) && /My activity/.test(navText), navText.replace(/\s+/g, " ").slice(0, 160));
   check("a member without the permissions has no Add device or Quick connect", (await mp.getByRole("button", { name: "Add device" }).count()) === 0 && (await mp.getByRole("button", { name: "Quick connect" }).count()) === 0);
   await mp.goto(`${BASE}/users`);
   await mp.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Overview" }).waitFor();
@@ -1124,7 +1124,39 @@ await page.goto(`${BASE}/connections`);
 await page.getByRole("heading", { name: "Connection methods" }).waitFor();
 await shot("11-connections");
 await page.goto(`${BASE}/credentials`);
-await page.getByRole("heading", { name: "Credentials", exact: true }).waitFor();
+await page.getByRole("heading", { name: "Vault", exact: true }).waitFor();
+check("the old Credentials address opens the Vault", new URL(page.url()).pathname === "/vault");
+// --- Vault: an entry with a generated password, shown only with a reason ---
+{
+  await page.getByRole("button", { name: "New entry" }).click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByLabel("Name", { exact: true }).fill("UI vault entry");
+  await dlg.getByLabel(/^Folder/).fill("UI/Test");
+  await dlg.getByLabel(/^Username/).fill("svc");
+  await dlg.getByRole("button", { name: "Generate" }).click();
+  const generated = await dlg.getByLabel(/^Password/).inputValue();
+  await shot("30-vault-form");
+  await dlg.getByRole("button", { name: "Create entry" }).click();
+  const row = page.locator("li", { hasText: "UI vault entry" });
+  await row.waitFor();
+  check("vault: an entry is created with a generated password", generated.length === 24 && /[A-Z]/.test(generated) && /[0-9]/.test(generated), `${generated.length}`);
+  await shot("31-vault-list");
+  await row.getByRole("button", { name: "Show" }).click();
+  const rd = page.getByRole("dialog");
+  check("vault: showing needs a reason first", await rd.getByRole("button", { name: "Show" }).isDisabled());
+  await rd.getByLabel(/^Reason/).fill("UI check");
+  await rd.getByRole("button", { name: "Show" }).click();
+  await rd.getByText(generated).waitFor();
+  check("vault: the secret is shown after a reason and hidden again on request", true);
+  await shot("32-vault-reveal");
+  await rd.getByRole("button", { name: "Hide now" }).click();
+  await rd.waitFor({ state: "detached" });
+  await row.getByRole("button", { name: "Show" }).waitFor();
+  check("vault: the list never holds the secret", !(await page.content()).includes(generated));
+  await page.getByRole("tab", { name: /Health/ }).click();
+  await page.getByText("Vault health score").waitFor();
+  await shot("33-vault-health");
+}
 await page.goto(`${BASE}/activity`);
 await page.getByRole("heading", { name: "Activity log" }).waitFor();
 await page.getByText("Remote session ended").first().waitFor();
@@ -1148,7 +1180,7 @@ await page.evaluate(() => localStorage.setItem("emremote-theme", "dark"));
   const tr = await browser.newContext({ locale: "tr-TR", viewport: { width: 1440, height: 900 }, storageState: await ctx.storageState() });
   const tp = await tr.newPage();
   const bad = [];
-  for (const path of ["/", "/statistics", "/devices", `/devices/${deviceId}`, "/connections", "/credentials", "/activity", "/settings", "/transfer"]) {
+  for (const path of ["/", "/statistics", "/devices", `/devices/${deviceId}`, "/connections", "/vault", "/activity", "/settings", "/transfer"]) {
     await tp.goto(`${BASE}${path}`);
     await tp.waitForLoadState("networkidle");
     await tp.waitForTimeout(400);

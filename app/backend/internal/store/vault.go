@@ -37,7 +37,7 @@ func (s *Store) DeleteVaultKey(ctx context.Context, userID string) error {
 
 // SecretRow is an encrypted secret of a connection or saved credential.
 type SecretRow struct {
-	Kind string // "connection" or "credential"
+	Kind string // "connection", "credential" or "credential_version"
 	ID   string
 	Enc  []byte
 }
@@ -45,7 +45,8 @@ type SecretRow struct {
 // ListSecrets returns every stored secret (both tables).
 func (s *Store) ListSecrets(ctx context.Context) ([]SecretRow, error) {
 	rows, err := s.pool.Query(ctx, `SELECT 'connection', id::text, secret_enc FROM connections WHERE secret_enc IS NOT NULL
-		UNION ALL SELECT 'credential', id::text, secret_enc FROM credentials WHERE secret_enc IS NOT NULL`)
+		UNION ALL SELECT 'credential', id::text, secret_enc FROM credentials WHERE secret_enc IS NOT NULL
+		UNION ALL SELECT 'credential_version', id::text, secret_enc FROM credential_versions`)
 	if err != nil {
 		return nil, err
 	}
@@ -58,8 +59,11 @@ func (s *Store) ListSecrets(ctx context.Context) ([]SecretRow, error) {
 
 func (s *Store) ReplaceSecret(ctx context.Context, row SecretRow) error {
 	table := "connections"
-	if row.Kind == "credential" {
+	switch row.Kind {
+	case "credential":
 		table = "credentials"
+	case "credential_version":
+		table = "credential_versions"
 	}
 	_, err := s.pool.Exec(ctx, `UPDATE `+table+` SET secret_enc = $2 WHERE id = $1`, row.ID, row.Enc)
 	return err
@@ -77,7 +81,12 @@ func (s *Store) ForgetVaultSecrets(ctx context.Context) (int64, error) {
 		}
 		n += tag.RowsAffected()
 	}
-	return n, nil
+	// Old versions sealed with the lost key are useless too.
+	tag, err := s.pool.Exec(ctx, `DELETE FROM credential_versions WHERE get_byte(secret_enc, 0) = 2`)
+	if err != nil {
+		return n, err
+	}
+	return n + tag.RowsAffected(), nil
 }
 
 // CountVaultKeys reports how many users hold a wrapped copy of the data key.

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.18 (2026-10-29)
+
+- **Vault for privileged accounts.** Credentials became the **Vault** (sidebar): sign-ins, SSH keys, API tokens and
+  secure notes, with folders, tags, a web address and a description.
+  - **Show and copy with a reason**, written to the activity log (never the values); values hide again after 30 seconds.
+    Entries can be **connect only**. Saved credentials from earlier versions start as connect only.
+  - **One-time codes:** store the secret of a two-factor sign-in and the vault shows the current 6-digit code.
+  - **Check-out:** shared entries can be used by one person at a time, for a limited time, with a reason. Sessions, files
+    and system information need the check-out too. Expired check-outs are checked in and the holder's sessions end.
+  - **Approval:** members request access, another administrator approves or rejects it (Vault → Requests, with a count in
+    the sidebar). **Break-glass** gives emergency access without approval, flagged in the activity log.
+  - **Sharing:** administrators give members or teams "use" (connect without seeing) or "use and show" access per entry.
+  - **Password rotation on Linux and Unix** over SSH, on request, on a schedule or after every check-in: `passwd` as the
+    account itself, or `chpasswd` as root or through sudo. The new password is confirmed by signing in with it.
+  - **History** of every value (show an older one, make it current) and a **Health** report (weak, reused, overdue and
+    old passwords, failed rotations).
+  - **Password policy** for generated and rotated passwords under Settings → Access.
+- Documentation: session recording is no longer listed as missing (docs/LIMITATIONS.md, docs/ARCHITECTURE.md,
+  docs/SECURITY.md).
+
 ## 0.1.17 (2026-10-24)
 
 - **Settings is organized in tabs:** Appearance (theme and terminal), Account (password, two-factor, signed-in browsers),

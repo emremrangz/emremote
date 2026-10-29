@@ -2,6 +2,7 @@
 set -e
 : "${TARGET_PASSWORD:?TARGET_PASSWORD is required}"
 echo "tester:${TARGET_PASSWORD}" | chpasswd
+printf 'svc:%s\nsvc2:%s\n' "${TARGET_PASSWORD}" "${TARGET_PASSWORD}" | chpasswd
 # System log with a couple of entries (for the system overview)
 syslogd -O /var/log/messages
 sleep 0.2

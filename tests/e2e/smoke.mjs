@@ -1369,6 +1369,159 @@ for (const addr of ["127.0.0.1", "8.8.8.8", "169.254.169.254", "localhost"]) {
   for (const t of [pub, other, meta, loop]) await c.del(`/api/devices/${t.dev}`);
 }
 
+// ---- Privileged access vault: reveal with a reason, check-out, approval, break-glass, rotation ----
+{
+  const vs = Date.now().toString(36);
+  const ticket = (cl, id) => cl.post(`/api/connections/${id}/sessions`, { width: 800, height: 600, dpi: 96, image: ["image/png"], audio: [], video: [], timezone: "" });
+  const reveal = (cl, id, body = {}) => cl.post(`/api/vault/${id}/reveal`, { reason: "e2e check", ...body });
+  const entry = async (id) => (await c.get(`/api/vault/${id}`)).data;
+  const mkEntry = (name, extra) => c.post("/api/credentials", { name, username: "svc", domain: "", secret: { mode: "set", password: TARGET_PASSWORD }, ...extra });
+  const pinned = sshPinned.data.settings;
+  const entryIds = [];
+
+  // Entries, revealing and history
+  const e1 = await mkEntry(`e2e-vault-${vs}`, { kind: "login", folder: "E2E/Linux", tags: ["e2e"], secret: { mode: "set", password: TARGET_PASSWORD, note: "recovery 1234", totp: "jbsw y3dp ehpk 3pxp" } });
+  entryIds.push(e1.data?.id);
+  check("vault: an entry stores a password, a note and a one-time code secret", e1.status === 201 && e1.data.folder === "E2E/Linux" && ["note", "password", "totp"].every((f) => e1.data.secret_fields.includes(f)) && e1.data.reveal_policy === "allowed", `${e1.status} ${JSON.stringify(e1.data?.error ?? "")}`);
+  const vlist = await c.get("/api/vault");
+  check("vault: the list shows the entry with manage access and no secret", vlist.status === 200 && vlist.data.some((x) => x.id === e1.data.id && x.access === "manage") && !JSON.stringify(vlist.data).includes(TARGET_PASSWORD));
+  const noReason = await reveal(c, e1.data.id, { reason: "" });
+  check("vault: showing a shared secret needs a reason", noReason.status === 422 && !!noReason.data.error.fields.reason);
+  const shown = await reveal(c, e1.data.id);
+  const codes = [nowStep() - 1, nowStep(), nowStep() + 1].map((st) => totp("JBSWY3DPEHPK3PXP", st));
+  check("vault: reveal returns the values and the current one-time code", shown.status === 200 && shown.data.fields.password === TARGET_PASSWORD && shown.data.fields.note === "recovery 1234" && codes.includes(shown.data.totp_code), `${shown.status}`);
+  check("vault: the one-time code secret itself is never returned", !JSON.stringify(shown.data).includes("JBSWY3DP"));
+  const merged = await c.put(`/api/credentials/${e1.data.id}`, { name: `e2e-vault-${vs}`, username: "svc", domain: "", secret: { mode: "merge", note: "changed note" } });
+  const after = await reveal(c, e1.data.id);
+  check("vault: merge changes only the typed field", merged.status === 200 && after.data.fields.password === TARGET_PASSWORD && after.data.fields.note === "changed note");
+  const det = await entry(e1.data.id);
+  check("vault: every change is kept in the history", det.versions?.length === 2 && det.versions.every((v) => v.source === "saved"), `${det.versions?.length}`);
+  const old = await reveal(c, e1.data.id, { version_id: det.versions[1].id });
+  check("vault: an older value can be shown", old.status === 200 && old.data.fields.note === "recovery 1234");
+  const restored = await c.post(`/api/vault/${e1.data.id}/versions/${det.versions[1].id}/restore`);
+  check("vault: an older value can be made current", restored.status === 204 && (await reveal(c, e1.data.id)).data.fields.note === "recovery 1234");
+  await c.put(`/api/credentials/${e1.data.id}`, { name: `e2e-vault-${vs}`, username: "svc", domain: "", reveal_policy: "never", secret: { mode: "keep" } });
+  check("vault: a connect-only entry is never shown", (await reveal(c, e1.data.id)).status === 403);
+  const badPolicy = await Promise.all([
+    c.put(`/api/credentials/${e1.data.id}`, { name: "x", username: "svc", domain: "", access_policy: "sometimes" }),
+    c.put(`/api/credentials/${e1.data.id}`, { name: "x", username: "svc", domain: "", rotation_connection_id: vnc.data.id }),
+    c.put(`/api/credentials/${e1.data.id}`, { name: "x", username: "svc; id", domain: "", rotation_connection_id: ssh.data.id }),
+    c.put(`/api/credentials/${e1.data.id}`, { name: "x", username: "svc", domain: "", secret: { mode: "set", totp: "not a secret!" } }),
+  ]);
+  check("vault: invalid policies, rotation targets, account names and code secrets are refused", badPolicy.every((r) => r.status === 422), badPolicy.map((r) => r.status).join(","));
+  const connMerge = await c.put(`/api/connections/${ssh.data.id}`, { name: "SSH", protocol: "ssh", port: 12222, username: "tester", domain: "", credential_id: null, settings: pinned, secret: { mode: "merge", password: "x" } });
+  check("vault: connection secrets do not take vault-only modes", connMerge.status === 422);
+
+  // Exclusive check-out gates connecting
+  const e2 = await mkEntry(`e2e-checkout-${vs}`, { username: "tester", access_policy: "exclusive", max_checkout_minutes: 30 });
+  entryIds.push(e2.data?.id);
+  const gatedConn = await c.post(`/api/devices/${devId}/connections`, { name: "Vault SSH", protocol: "ssh", port: 12222, username: "", domain: "", credential_id: e2.data.id, settings: pinned, secret: { mode: "keep" } });
+  const blocked = await ticket(c, gatedConn.data.id);
+  check("vault: connecting with a check-out entry needs the check-out", blocked.status === 403 && blocked.data.error.code === "vault_checkout_required", `${blocked.status}`);
+  const filesBlocked = await c.post(`/api/connections/${gatedConn.data.id}/ssh-access`, {});
+  check("vault: so do files and system information", filesBlocked.status === 403 && filesBlocked.data.error.code === "vault_checkout_required", `${filesBlocked.status}`);
+  check("vault: revealing it needs the check-out too", (await reveal(c, e2.data.id)).status === 409);
+  const tooLong = await c.post(`/api/vault/${e2.data.id}/checkout`, { reason: "e2e", minutes: 60 });
+  const co = await c.post(`/api/vault/${e2.data.id}/checkout`, { reason: "e2e check", minutes: 15 });
+  check("vault: check-out is limited to the entry's longest time", tooLong.status === 422 && co.status === 201 && co.data.username === ADMIN_USER, `${tooLong.status} ${co.status}`);
+  const gatedSess = await openSession(c, gatedConn.data.id, { seconds: 6 });
+  check("vault: the holder connects with the checked-out entry", gatedSess.imgBytes > 1000 && gatedSess.errors.length === 0, `img=${gatedSess.imgBytes}`);
+  check("vault: a second check-out is refused", (await c.post(`/api/vault/${e2.data.id}/checkout`, { reason: "again", minutes: 15 })).status === 409);
+  check("vault: an entry that is checked out cannot be deleted", (await c.del(`/api/credentials/${e2.data.id}`)).status === 409);
+  check("vault: check-in", (await c.post(`/api/vault/${e2.data.id}/checkin`)).status === 204 && (await ticket(c, gatedConn.data.id)).status === 403);
+
+  // Members: sharing, requests, approval, break-glass
+  const mpw = `Vault-member-${vs}-pw`;
+  const mu = await c.post("/api/users", { username: `vault-mem-${vs}`, password: mpw, role: "member", team_id: null, permissions: ["sessions.connect"], inventory_mode: "all", device_ids: [], group_ids: [] });
+  const mc = new Client();
+  const ml = await mc.post("/api/auth/login", { username: `vault-mem-${vs}`, password: mpw });
+  mc.csrf = ml.data?.csrf_token ?? "";
+  await c.put(`/api/credentials/${e2.data.id}`, { name: `e2e-checkout-${vs}`, username: "tester", domain: "", access_policy: "approval", break_glass: true });
+  check("vault: members do not see shared entries they were not given", ml.status === 200 && (await mc.get("/api/vault")).data.every((x) => x.id !== e2.data.id) && (await mc.post(`/api/vault/${e2.data.id}/checkout`, { reason: "x" })).status === 404);
+  check("vault: and cannot connect with them while the vault protects them", (await ticket(mc, gatedConn.data.id)).status === 403);
+  const share = await c.put(`/api/vault/${e2.data.id}/grants`, { grants: [{ user_id: mu.data.id, team_id: null, level: "use", name: "" }] });
+  const memberShare = await mc.put(`/api/vault/${e2.data.id}/grants`, { grants: [] });
+  check("vault: administrators share an entry with a member; members cannot", share.status === 200 && share.data.length === 1 && memberShare.status === 403, `${share.status} ${memberShare.status}`);
+  const mview = (await mc.get("/api/vault")).data.find((x) => x.id === e2.data.id);
+  check("vault: the member sees the entry with use access", mview?.access === "use" && mview.can_manage === false);
+  check("vault: use access cannot show the secret", (await reveal(mc, e2.data.id)).status === 403);
+  check("vault: an approval entry cannot be checked out without approval", (await mc.post(`/api/vault/${e2.data.id}/checkout`, { reason: "need it", minutes: 15 })).status === 409);
+  const rq = await mc.post(`/api/vault/${e2.data.id}/requests`, { reason: "ticket INC-42", minutes: 15 });
+  check("vault: a member requests access with a reason", rq.status === 201 && rq.data.status === "pending");
+  check("vault: one open request per entry", (await mc.post(`/api/vault/${e2.data.id}/requests`, { reason: "again", minutes: 15 })).status === 409);
+  check("vault: members cannot approve", (await mc.post(`/api/vault/requests/${rq.data.id}/approve`, { note: "" })).status === 403);
+  const pend = await c.get("/api/vault/requests");
+  check("vault: administrators see the waiting request", pend.data.some((x) => x.id === rq.data.id && x.status === "pending"));
+  const ok = await c.post(`/api/vault/requests/${rq.data.id}/approve`, { note: "go ahead" });
+  check("vault: an administrator approves it, once", ok.status === 200 && ok.data.status === "approved" && !!ok.data.valid_until && (await c.post(`/api/vault/requests/${rq.data.id}/reject`, { note: "" })).status === 409);
+  const mco = await mc.post(`/api/vault/${e2.data.id}/checkout`, { reason: "", minutes: 0 });
+  check("vault: the approved member checks out for the approved time", mco.status === 201 && mco.data.request_id === rq.data.id && Math.abs(new Date(mco.data.expires_at) - Date.now() - 15 * 60000) < 60000, `${mco.status}`);
+  const memberTicket = await ticket(mc, gatedConn.data.id);
+  const adminTicket = await ticket(c, gatedConn.data.id);
+  check("vault: only the holder may connect, administrators included", memberTicket.status === 201 && adminTicket.status === 403, `${memberTicket.status} ${adminTicket.status}`);
+  check("vault: nobody else may show it meanwhile", (await reveal(c, e2.data.id)).status === 409);
+  check("vault: an administrator can force the check-in", (await c.post(`/api/vault/${e2.data.id}/checkin`)).status === 204 && (await ticket(mc, gatedConn.data.id)).status === 403);
+  const bgShort = await mc.post(`/api/vault/${e2.data.id}/checkout`, { reason: "urgent", break_glass: true, minutes: 15 });
+  const bg = await mc.post(`/api/vault/${e2.data.id}/checkout`, { reason: "core switch down, nobody answers", break_glass: true, minutes: 15 });
+  check("vault: break-glass needs a fuller reason and works without approval", bgShort.status === 422 && bg.status === 201 && bg.data.break_glass === true, `${bgShort.status} ${bg.status}`);
+  await mc.post(`/api/vault/${e2.data.id}/checkin`);
+  await c.put(`/api/credentials/${e2.data.id}`, { name: `e2e-checkout-${vs}`, username: "tester", domain: "", break_glass: false });
+  check("vault: break-glass can be switched off", (await mc.post(`/api/vault/${e2.data.id}/checkout`, { reason: "core switch down again", break_glass: true, minutes: 15 })).status === 403);
+  const mineOnly = (await mc.get("/api/vault/requests")).data;
+  check("vault: members see only their own requests", mineOnly.length >= 1 && mineOnly.every((x) => x.user_id === mu.data.id));
+
+  // Rotation: the account changes its own password; root-less chpasswd through sudo. These change real
+  // passwords on the test target, so run them against a freshly started one (tests/stack.sh up).
+  const e3 = await mkEntry(`e2e-rotate-self-${vs}`, {});
+  entryIds.push(e3.data?.id);
+  const svcConn = await c.post(`/api/devices/${devId}/connections`, { name: "svc SSH", protocol: "ssh", port: 12222, username: "", domain: "", credential_id: e3.data.id, settings: pinned, secret: { mode: "keep" } });
+  const setRot = await c.put(`/api/credentials/${e3.data.id}`, { name: `e2e-rotate-self-${vs}`, username: "svc", domain: "", rotation_connection_id: svcConn.data.id, rotation_interval_days: 30 });
+  const rot = await c.post(`/api/vault/${e3.data.id}/rotate`);
+  const rotated = await reveal(c, e3.data.id);
+  check("vault: rotation changes the account's own password with passwd and confirms it", setRot.status === 200 && rot.status === 200 && rot.data.status === "ok" && rotated.data.fields.password !== TARGET_PASSWORD && rotated.data.fields.password.length === 24, `${setRot.status} ${rot.status} ${JSON.stringify(rot.data)}`);
+  const svcSess = await openSession(c, svcConn.data.id, { seconds: 6 });
+  check("vault: connections that use the entry sign in with the new password", svcSess.imgBytes > 1000 && svcSess.errors.length === 0, `img=${svcSess.imgBytes}`);
+  check("vault: the rotated value is in the history", (await entry(e3.data.id)).versions.some((v) => v.source === "rotated"));
+  const pol = await c.put("/api/settings/vault", { length: 32, lower: true, upper: true, digits: true, symbols: false, no_ambiguous: true, request_valid_hours: 8 });
+  const memberPol = await mc.put("/api/settings/vault", { length: 12, lower: true, upper: false, digits: false, symbols: false, no_ambiguous: false, request_valid_hours: 8 });
+  const rot2 = await c.post(`/api/vault/${e3.data.id}/rotate`);
+  const pw2 = (await reveal(c, e3.data.id)).data.fields.password;
+  check("vault: the password policy shapes rotated passwords; only administrators set it", pol.status === 200 && memberPol.status === 403 && rot2.data?.status === "ok" && pw2.length === 32 && /^[A-Za-z0-9]+$/.test(pw2), `${pol.status} ${memberPol.status} ${pw2?.length}`);
+  await c.put("/api/settings/vault", { length: 24, lower: true, upper: true, digits: true, symbols: true, no_ambiguous: true, request_valid_hours: 8 });
+
+  // tester may run only chpasswd through sudo (see tests/targets/Dockerfile).
+  const testerConn = await c.post(`/api/devices/${devId}/connections`, { name: "tester SSH", protocol: "ssh", port: 12222, username: "tester", domain: "", credential_id: null, settings: pinned, secret: { mode: "set", password: TARGET_PASSWORD } });
+  const e4 = await mkEntry(`e2e-rotate-sudo-${vs}`, { username: "svc2", rotation_connection_id: testerConn.data.id, access_policy: "exclusive", rotate_after_checkin: true });
+  entryIds.push(e4.data?.id);
+  const rot3 = await c.post(`/api/vault/${e4.data.id}/rotate`);
+  check("vault: rotation sets another account's password through sudo chpasswd and confirms it", e4.status === 201 && rot3.status === 200 && rot3.data.status === "ok", `${e4.status} ${rot3.status} ${JSON.stringify(rot3.data)}`);
+  await c.post(`/api/vault/${e4.data.id}/checkout`, { reason: "e2e rotate after", minutes: 15 });
+  const before = (await entry(e4.data.id)).entry.rotated_at;
+  check("vault: rotation waits while the entry is checked out", (await c.post(`/api/vault/${e4.data.id}/rotate`)).status === 409);
+  const seen = (await reveal(c, e4.data.id)).data.fields.password;
+  await c.post(`/api/vault/${e4.data.id}/checkin`);
+  let rotatedAfter = null;
+  for (let i = 0; i < 30 && !rotatedAfter; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const en = (await entry(e4.data.id)).entry;
+    if (en.rotated_at !== before && en.rotation_status === "ok") rotatedAfter = en;
+  }
+  const afterCheckin = rotatedAfter && (await c.post(`/api/vault/${e4.data.id}/checkout`, { reason: "look again", minutes: 15 }), (await reveal(c, e4.data.id)).data.fields.password);
+  await c.post(`/api/vault/${e4.data.id}/checkin`);
+  check("vault: the password someone saw is changed after check-in", !!rotatedAfter && afterCheckin && afterCheckin !== seen, rotatedAfter ? "" : "no rotation within 30 s");
+
+  // Health report and audit
+  const health = await c.get("/api/vault/health");
+  check("vault: the health report finds reused passwords without returning them", health.status === 200 && health.data.reused.some((g) => g.includes(e1.data.id) && g.includes(e2.data.id)) && !JSON.stringify(health.data).includes(TARGET_PASSWORD));
+  const va = JSON.stringify((await c.get("/api/audit?action=vault.&limit=200")).data);
+  check("vault: reveals, check-outs, approvals, break-glass, sharing and rotations are audited", ["vault.reveal", "vault.checkout", "vault.checkin", "vault.request", "vault.approve", "vault.break_glass", "vault.share", "vault.rotate", "vault.restore"].every((a) => va.includes(`"${a}"`)) && va.includes("ticket INC-42"));
+  check("vault: the audit log holds reasons but no secrets", !va.includes(TARGET_PASSWORD) && !va.includes(rotated.data.fields.password) && !va.includes("recovery 1234"));
+
+  for (const id of entryIds) if (id) await c.del(`/api/credentials/${id}`);
+  await c.del(`/api/users/${mu.data.id}`);
+  check("vault: entries are deleted with their history", (await c.get(`/api/vault/${e1.data.id}`)).status === 404);
+}
+
 // Cross-site WebSocket hijacking: wrong Origin is rejected.
 const t2 = await c.post(`/api/connections/${vnc.data.id}/sessions`, { width: 800, height: 600, dpi: 96, image: ["image/png"], audio: [], video: [], timezone: "" });
 const evil = await wsStatus(`/api/tunnel?ticket=${encodeURIComponent(t2.data.ticket)}`, { Origin: "https://evil.example", Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") });

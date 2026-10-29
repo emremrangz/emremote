@@ -16,6 +16,11 @@ export function describe(e: AuditEvent): string {
   if (typeof d.path === "string") parts.push(String(d.path) + (typeof d.new_path === "string" ? ` → ${d.new_path}` : ""));
   if (typeof d.bytes === "number") parts.push(bytesLabel(d.bytes));
   if (typeof d.protocol === "string" && !e.action.startsWith("session.end")) parts.push(String(d.protocol).toUpperCase());
+  if (typeof d.holder === "string") parts.push(`held by ${d.holder}` + (d.expired ? " (time ran out)" : ""));
+  if (typeof d.requester === "string") parts.push(`for ${d.requester}`);
+  if (typeof d.minutes === "number") parts.push(`${d.minutes} min`);
+  if (typeof d.status === "string" && e.action === "vault.rotate") parts.push(String(d.status) + (typeof d.error === "string" ? `: ${d.error}` : ""));
+  if (Array.isArray(d.grants)) parts.push(`shared with: ${(d.grants as string[]).join(", ") || "nobody"}`);
   return parts.join(" · ");
 }
 

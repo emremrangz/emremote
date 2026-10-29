@@ -21,6 +21,7 @@ const categories = [
   { value: "device.", label: "Devices" },
   { value: "connection.", label: "Connections" },
   { value: "credential.", label: "Credentials" },
+  { value: "vault.", label: "Vault" },
   { value: "group.", label: "Groups" },
 ];
 
