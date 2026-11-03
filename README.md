@@ -137,6 +137,9 @@ emremote is free and open source, built and maintained in spare time. If it save
 - **Star** the repository; it helps other people find it.
 - **Report** a bug or an idea in the [issues](https://github.com/emremrangz/emremote/issues), or tell a
   colleague who manages servers.
+- **Sponsor** my work at [buymeacoffee.com/jidmtzaqvt](https://www.buymeacoffee.com/jidmtzaqvt)
+
+<a href="https://www.buymeacoffee.com/jidmtzaqvt"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=jidmtzaqvt&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy me a coffee" height="50"></a>
 
 ## Contributing
 
