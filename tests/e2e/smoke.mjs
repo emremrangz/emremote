@@ -94,7 +94,11 @@ async function openSession(client, connectionId, { seconds = 8, label, earlySize
     width: 1280, height: 800, dpi: 96,
     image: ["image/png", "image/jpeg", "image/webp"], audio: ["audio/L16"], video: [], timezone: "Europe/Istanbul", ...extra,
   });
-  if (t.status !== 201) return { error: `ticket ${t.status} ${JSON.stringify(t.data)}` };
+  if (t.status !== 201) {
+    const error = `ticket ${t.status} ${JSON.stringify(t.data)}`;
+    return { error, errors: [error], imgBytes: 0, opcodes: {}, why: "ticket" };
+  }
+  if (t.data.engine === "terminal") return await terminalSession(client, t.data, seconds);
   const wsURL = BASE.replace(/^http/, "ws") + `/api/tunnel?ticket=${encodeURIComponent(t.data.ticket)}`;
   const headers = { Origin: ORIGIN, Cookie: [...client.cookies].map(([k, v]) => `${k}=${v}`).join("; ") };
   return await new Promise((resolve) => {
@@ -127,6 +131,38 @@ async function openSession(client, connectionId, { seconds = 8, label, earlySize
         }
         if (op === "error") { stats.errors.push(`${args[0]} (${args[1]})`); clearTimeout(timer); finish("error"); }
       }
+    };
+    ws.onerror = (e) => { clearTimeout(timer); resolve({ ...stats, why: "ws-error " + (e.message ?? "") }); };
+    ws.onclose = (e) => { clearTimeout(timer); resolve({ ...stats, why: `closed ${e.code} ${e.reason}` }); };
+  });
+}
+
+// SSH sessions in the built-in terminal: terminal data over the WebSocket instead of the gateway's images. After the
+// shell is ready a command prints 1200 characters, so imgBytes (here: bytes of screen output) means the same as for
+// the gateway's sessions: the session really streams.
+async function terminalSession(client, data, seconds) {
+  const headers = { Origin: ORIGIN, Cookie: [...client.cookies].map(([k, v]) => `${k}=${v}`).join("; ") };
+  return await new Promise((resolve) => {
+    const stats = { uuid: null, opcodes: {}, imgBytes: 0, size: null, errors: [], ticket: data.ticket, largest: null, engine: "terminal", text: "" };
+    const ws = new WebSocket(BASE.replace(/^http/, "ws") + `/api/terminal?ticket=${encodeURIComponent(data.ticket)}&cols=120&rows=40`, { headers });
+    ws.binaryType = "arraybuffer";
+    const finish = (why) => { clearTimeout(timer); try { ws.close(); } catch {} resolve({ ...stats, why }); };
+    const timer = setTimeout(() => finish("timeout"), seconds * 1000);
+    ws.onmessage = (ev) => {
+      if (typeof ev.data !== "string") {
+        const b = Buffer.from(ev.data);
+        stats.imgBytes += b.length;
+        stats.text += b.toString("utf8");
+        return;
+      }
+      const m = JSON.parse(ev.data);
+      stats.opcodes[m.type] = (stats.opcodes[m.type] ?? 0) + 1;
+      if (m.type === "ready") {
+        stats.uuid = m.session_id;
+        stats.size = [120, 40];
+        ws.send(Buffer.from("printf 'x%.0s' $(seq 1 1200); echo\r"));
+      }
+      if (m.type === "exit" && m.status === -1) stats.errors.push(m.reason);
     };
     ws.onerror = (e) => { clearTimeout(timer); resolve({ ...stats, why: "ws-error " + (e.message ?? "") }); };
     ws.onclose = (e) => { clearTimeout(timer); resolve({ ...stats, why: `closed ${e.code} ${e.reason}` }); };
@@ -250,8 +286,14 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
     writeFileSync(`${OUT}/${label.toLowerCase()}-frame.${ext}`, s.largest.data);
   }
   if (label === "SSH") {
-    const reuse = await wsStatus(`/api/tunnel?ticket=${encodeURIComponent(s.ticket)}`, { Origin: ORIGIN, Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") });
+    const hdr = { Origin: ORIGIN, Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") };
+    check("SSH opens in the built-in terminal by default", s.engine === "terminal", s.engine ?? "gateway");
+    const reuse = await wsStatus(`/api/terminal?ticket=${encodeURIComponent(s.ticket)}`, hdr);
     check("tunnel tickets are single-use", reuse !== 0, String(reuse));
+    // A ticket for the built-in terminal is refused by the gateway tunnel (and the other way round).
+    const tt = await c.post(`/api/connections/${conn.data.id}/sessions`, { width: 800, height: 600, dpi: 96, image: ["image/png"] });
+    const cross = await wsStatus(`/api/tunnel?ticket=${encodeURIComponent(tt.data.ticket)}`, hdr);
+    check("a terminal ticket cannot open the gateway tunnel", cross !== 0, String(cross));
   }
 }
 
@@ -752,7 +794,8 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   check("a recorded session is listed with its size", rec.error === undefined && list.total === 1 && list.items[0].ended_at && list.items[0].size_bytes > 200 && list.items[0].device_name.startsWith("rec-smoke"), JSON.stringify(list.items[0] ?? {}));
   const file = await fetch(BASE + `/api/recordings/${list.items[0]?.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } });
   const body = await file.text();
-  check("the recording file is the gateway's stream and has no keyboard events", file.status === 200 && body.includes("sync,") && !/\d+\.key,/.test(body));
+  const lines = body.split("\n").filter(Boolean);
+  check("the SSH recording is text (asciicast) and has no keyboard events", file.status === 200 && list.items[0]?.format === "cast" && JSON.parse(lines[0]).version === 2 && lines.slice(1).every((l) => /^\[[\d.]+, "[or]", /.test(l)) && body.includes("xxxxxxxxxx"));
   const memberName = `rec-m-${stamp4}`;
   await c.post("/api/users", { username: memberName, password: `Rec-${stamp4}-pw1x`, role: "member", team_id: null, permissions: ["sessions.connect"], inventory_mode: "none", device_ids: [], group_ids: [] });
   const mm = new Client();
@@ -795,7 +838,7 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   if (onSmb) {
     const f2 = await fetch(BASE + `/api/recordings/${onSmb.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } });
     const t2 = await f2.text();
-    check("the recording plays from the SMB share", f2.status === 200 && t2.includes("sync,") && t2.length === onSmb.size_bytes, `${f2.status} ${t2.length} vs ${onSmb.size_bytes}`);
+    check("the recording plays from the SMB share", f2.status === 200 && (onSmb.format === "cast" ? t2.startsWith('{"version":2') : t2.includes("sync,")) && t2.length === onSmb.size_bytes, `${f2.status} ${t2.length} vs ${onSmb.size_bytes}`);
     check("deleting a recording removes it from the SMB share", (await c.del(`/api/recordings/${onSmb.id}`)).status === 204 && (await fetch(BASE + `/api/recordings/${onSmb.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } })).status === 404);
   }
   const nfsSave = await c.put("/api/settings/recording", { ...baseCfg, storage: nfsT });
@@ -806,7 +849,7 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   if (onNfs) {
     const f3 = await fetch(BASE + `/api/recordings/${onNfs.id}/file`, { headers: { Cookie: [...c.cookies].map(([k, v]) => `${k}=${v}`).join("; ") } });
     const t3 = await f3.text();
-    check("the recording plays from the NFS export", f3.status === 200 && t3.includes("sync,") && t3.length === onNfs.size_bytes, `${f3.status} ${t3.length} vs ${onNfs.size_bytes}`);
+    check("the recording plays from the NFS export", f3.status === 200 && (onNfs.format === "cast" ? t3.startsWith('{"version":2') : t3.includes("sync,")) && t3.length === onNfs.size_bytes, `${f3.status} ${t3.length} vs ${onNfs.size_bytes}`);
     check("deleting a recording removes it from the NFS export", (await c.del(`/api/recordings/${onNfs.id}`)).status === 204);
   }
   const keep = await c.put("/api/settings/recording", { ...baseCfg, storage: { ...nfsT, keep_local: true } });
@@ -1096,7 +1139,24 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   const stripFile = `/home/tester/emr-watch-${tag}.txt`;
 
   // Watch a shared session: returns what the viewer received; optionally tries to type.
-  const watch = (token, { seconds = 6, typeText = "" } = {}) => new Promise((resolve) => {
+  // A session in the built-in terminal is watched as terminal data; typing must have no effect there either.
+  const watchTerminal = (token, { seconds = 6, typeText = "" } = {}) => new Promise((resolve) => {
+    const out = { imgBytes: 0, opcodes: {}, closed: null, errors: [] };
+    const ws = new WebSocket(BASE.replace(/^http/, "ws") + `/api/watch-tunnel?token=${encodeURIComponent(token)}`, { headers: { Origin: ORIGIN, Cookie: cookie() } });
+    ws.binaryType = "arraybuffer";
+    const done = (why) => { clearTimeout(timer); try { ws.close(); } catch {} resolve({ ...out, why }); };
+    const timer = setTimeout(() => done("timeout"), seconds * 1000);
+    ws.onopen = () => { if (typeText) setTimeout(() => { try { ws.send(Buffer.from(typeText + "\r")); } catch {} }, 1500); };
+    ws.onmessage = (ev) => {
+      if (typeof ev.data !== "string") out.imgBytes += ev.data.byteLength;
+      else out.opcodes[JSON.parse(ev.data).type] = 1;
+    };
+    ws.onclose = (e) => { out.closed = e.code; done("closed"); };
+    ws.onerror = (e) => { out.errors.push(String(e.message ?? "error")); done("ws-error"); };
+  });
+  const watch = (token, opts) => (shareEngine === "terminal" ? watchTerminal(token, opts) : watchGateway(token, opts));
+  let shareEngine = "gateway";
+  const watchGateway = (token, { seconds = 6, typeText = "" } = {}) => new Promise((resolve) => {
     const out = { imgBytes: 0, opcodes: {}, closed: null, errors: [] };
     const ws = new WebSocket(BASE.replace(/^http/, "ws") + `/api/watch-tunnel?token=${encodeURIComponent(token)}&width=1000&height=700&dpi=96`, { protocols: ["guacamole"], headers: { Origin: ORIGIN, Cookie: cookie() } });
     let buffer = "";
@@ -1131,7 +1191,8 @@ for (const [label, conn] of [["SSH", ssh], ["VNC", vnc], ["RDP", rdp]]) {
   check("the owner can create a view-only link", share.status === 201 && /^\/watch\/[A-Za-z0-9_-]{20,}$/.test(share.data.path), `status ${share.status}`);
   const token = share.data.path.split("/").pop();
   const info = await c.get(`/api/watch/${token}`);
-  check("the link names the shared session", info.status === 200 && info.data.protocol === "ssh" && info.data.owner === "admin", JSON.stringify(info.data));
+  shareEngine = info.data?.engine ?? "gateway";
+  check("the link names the shared session", info.status === 200 && info.data.protocol === "ssh" && info.data.owner === "admin" && info.data.engine === "terminal", JSON.stringify(info.data));
   const bad = await c.get(`/api/watch/not-a-real-token`);
   check("an unknown link is refused", bad.status === 404, `status ${bad.status}`);
 

@@ -13,7 +13,8 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/Menu";
 import { canExportVideo } from "@/lib/recordingExport";
 import { useToast } from "@/components/ui/Toast";
 import { useAccess } from "@/lib/auth";
-import { del, get } from "@/lib/api";
+import { del, errorMessage, get } from "@/lib/api";
+import { parseCast, transcript } from "@/lib/cast";
 import { bytes, dateTime, duration } from "@/lib/format";
 import type { Protocol, Recording } from "@/lib/types";
 
@@ -28,6 +29,22 @@ export default function RecordingsPage() {
   const [playing, setPlaying] = useState<Recording | null>(null);
   const [removing, setRemoving] = useState<Recording | null>(null);
   const [exporting, setExporting] = useState<Recording | null>(null);
+  /** A terminal recording as plain text: what the session printed, without colors and cursor movement. */
+  const downloadTranscript = async (r: Recording) => {
+    try {
+      const res = await fetch(`/api/recordings/${r.id}/file?download=1`);
+      if (!res.ok) throw new Error("The recording could not be loaded.");
+      const text = transcript(parseCast(await res.text()).events);
+      const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${r.device_name.replace(/[^\w.-]+/g, "_")}-${r.started_at.slice(0, 19).replace(/[-:T]/g, "")}.txt`;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  };
   const q = useQuery({
     queryKey: ["recordings", protocol, page],
     queryFn: () => get<{ items: Recording[]; total: number }>(`/api/recordings?limit=${PAGE}&offset=${page * PAGE}${protocol ? `&protocol=${protocol}` : ""}`),
@@ -98,8 +115,17 @@ export default function RecordingsPage() {
                             </Button>
                           </MenuTrigger>
                           <MenuContent>
-                            {canExportVideo() && r.ended_at && <MenuItem onSelect={() => setExporting(r)}>Video (MP4)</MenuItem>}
-                            <MenuItem onSelect={() => window.location.assign(`/api/recordings/${r.id}/file?download=1`)}>Raw recording (.guac)</MenuItem>
+                            {r.format === "cast" ? (
+                              <>
+                                <MenuItem onSelect={() => downloadTranscript(r)}>Text transcript (.txt)</MenuItem>
+                                <MenuItem onSelect={() => window.location.assign(`/api/recordings/${r.id}/file?download=1`)}>Terminal recording (.cast)</MenuItem>
+                              </>
+                            ) : (
+                              <>
+                                {canExportVideo() && r.ended_at && <MenuItem onSelect={() => setExporting(r)}>Video (MP4)</MenuItem>}
+                                <MenuItem onSelect={() => window.location.assign(`/api/recordings/${r.id}/file?download=1`)}>Raw recording (.guac)</MenuItem>
+                              </>
+                            )}
                           </MenuContent>
                         </Menu>
                         {isAdmin && r.ended_at && (

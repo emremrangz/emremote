@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.1.21 (2026-11-10)
+
+- **New SSH terminal, drawn in the browser.** SSH sessions now open in a built-in terminal (xterm.js) carried by
+  emremote's own SSH client instead of the gateway's terminal, which was drawn on the server and sent as pictures and did
+  not support bracketed paste.
+  - Typing, scrolling and large outputs are as quick as in a desktop SSH client.
+  - Pasting a script into nano or vim keeps its indentation: a paste arrives as one bracketed paste instead of typed
+    lines that the editor's auto-indent shifted.
+  - Copy and paste like PuTTY and MobaXterm: selecting copies, right-click pastes (with text selected it only copies),
+    middle click pastes, Ctrl+V / Shift+Insert paste, Ctrl+Shift+C copies, Ctrl+C stays the interrupt key.
+  - Ctrl+Shift+F finds text, Ctrl +/- changes the text size, links are clickable, theme and font apply without
+    reconnecting, and after the session ends the output stays readable (R or Enter reconnects).
+  - A wrong or missing password is asked for in the browser (used once, not stored); a changed host key is refused
+    before the terminal opens.
+  - Recording, sharing (view only), files, snippets, the vault check-out, jump hosts and the activity log work as
+    before. Set a connection's **Terminal** to **Gateway** to keep the old terminal for a device; Telnet is unchanged.
+- **SSH recordings are text.** Sessions in the built-in terminal are recorded as asciicast v2 (output only, never the
+  keyboard). The player redraws them sharply, plays at 1x to 8x, can skip long pauses and **finds** a word in what the
+  session printed (jumping to that moment). They download as a text transcript or as a `.cast` file.
+- **Recording player shows the pointer.** The mouse was always recorded, but on a large screen shown smaller it was a tiny
+  arrow. The player now draws a halo around the pointer, a ring where each click happened (left, middle and right in
+  different colors) and, if you switch it on, a short trail. The timeline shows how busy the pointer was and marks every
+  click, with buttons to jump to the previous or next click, back and forward 10 seconds, and full screen. The two pointer
+  choices are remembered in the browser. Recordings over 200 MB play without the highlight.
+- Recordings are downloaded once for playback instead of streamed, so playback starts when the file has arrived (the
+  progress is shown).
+
 ## 0.1.20 (2026-11-10)
 
 - **Security updates of dependencies.** The database driver (pgx 5.12.0) fixes two high-severity issues; emremote does not

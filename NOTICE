@@ -14,5 +14,8 @@ The recordings share clients are go-smb2 (https://github.com/hirochachacha/go-sm
 
 The MP4 export bundles mp4-muxer (https://github.com/Vanilagy/mp4-muxer, MIT license).
 
+The built-in SSH terminal and the terminal recording player bundle xterm.js and its fit, search, unicode11, web-links
+and webgl addons (https://github.com/xtermjs/xterm.js, MIT license).
+
 The world map outlines (app/frontend/src/lib/worldMapData.ts) are generated from Natural Earth
 (https://www.naturalearthdata.com/), which is in the public domain, through the world-atlas package (ISC license).

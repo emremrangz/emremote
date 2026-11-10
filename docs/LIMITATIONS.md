@@ -17,6 +17,11 @@
 - The system overview and file manager need an SSH connection method whose host key is pinned. On
   Windows, enable the optional OpenSSH Server. The Windows system overview is implemented but has
   not yet been validated against a real Windows host.
+- The built-in SSH terminal was tested in Chromium (headless, with the DOM renderer) against OpenSSH on Alpine Linux,
+  including a paste into nano with auto-indent, copy on select and right-click paste. Firefox and Safari, the WebGL
+  renderer on real graphics hardware, network equipment shells (Cisco, MikroTik, Juniper) and Windows' OpenSSH Server
+  were not tested. Firefox and Safari do not let a page read the clipboard, so there right-click paste only works after
+  allowing it (or use Ctrl+V / Shift+Insert). Telnet still uses the gateway's terminal.
 - macOS Screen Sharing works through its VNC compatibility mode, which has lower image quality and
   performance than RDP.
 - The gateway decides frame rate and encoding. Expect an experience comparable to Guacamole: good

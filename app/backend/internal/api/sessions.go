@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +45,14 @@ type ticket struct {
 	jumpName  string
 	// recording is set when the gateway records this session.
 	recording *recordingPlan
+	// term is set for the built-in SSH terminal: the signed-in connection waiting for the browser.
+	term *terminalPlan
+}
+
+// release closes what a ticket holds when it is not used.
+func (tk *ticket) release() {
+	tk.forwarder.Close()
+	tk.term.close()
 }
 
 type ticketStore struct {
@@ -71,7 +80,7 @@ func (t *ticketStore) take(id string) *ticket {
 		return nil
 	}
 	if time.Now().After(tk.expires) {
-		tk.forwarder.Close()
+		tk.release()
 		return nil
 	}
 	return tk
@@ -83,7 +92,7 @@ func (t *ticketStore) sweep() {
 	now := time.Now()
 	for k, tk := range t.m {
 		if now.After(tk.expires) {
-			tk.forwarder.Close()
+			tk.release()
 			delete(t.m, k)
 		}
 	}
@@ -112,6 +121,8 @@ type ActiveSession struct {
 	guacdID       string
 	viewerCancels map[int]context.CancelFunc
 	nextViewer    int
+	// term is set for sessions in the built-in terminal; watchers read from it.
+	term *termHub
 }
 
 type tunnelRegistry struct {
@@ -236,6 +247,10 @@ type sessionRequest struct {
 	KeyboardLayout string `json:"keyboard_layout"`
 	// Terminal is the user's own terminal appearance (SSH and Telnet).
 	Terminal *TerminalPrefs `json:"terminal"`
+	// Username and Password are typed by the user for the built-in SSH terminal when none are saved (or they were
+	// wrong). They are used for this session only and never stored.
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 var (
@@ -268,6 +283,13 @@ func (s *Server) decodeSessionRequest(w http.ResponseWriter, r *http.Request) (s
 	between(v, "height", req.Height, 64, 8192)
 	between(v, "dpi", req.DPI, 48, 480)
 	req.Terminal = v.terminalPrefs(req.Terminal)
+	req.Username = strings.TrimSpace(req.Username)
+	if len(req.Username) > 128 {
+		v.fail("username", "Too long")
+	}
+	if len(req.Password) > 1024 {
+		v.fail("password", "Too long")
+	}
 	if req.Timezone != "" && (len(req.Timezone) > 64 || !timezoneRe.MatchString(req.Timezone)) {
 		req.Timezone = ""
 	}
@@ -322,28 +344,11 @@ func (s *Server) issueTicket(w http.ResponseWriter, r *http.Request, req session
 		}
 		tgt = &resolvedTarget{Addr: addr, Port: c.Port}
 	}
-	// Through a jump host the gateway connects to a temporary local listener instead.
-	addr, port := tgt.Addr, tgt.Port
-	var fwd *jump.Forwarder
-	jumpName := ""
-	if tgt.Via != nil {
-		f, err := s.startForwarder(tgt)
-		if err != nil {
-			tgt.Via.Close()
-			slog.Error("jump forwarder", "error", err)
-			writeError(w, http.StatusBadGateway, "jump_failed", "Could not prepare the jump host tunnel: "+err.Error())
-			return
-		}
-		fwd = f
-		addr, port = f.Addr()
-		if b, err := s.store.GetConnection(r.Context(), jumpIDOf(c.Settings)); err == nil {
-			jumpName = b.DeviceName
-		}
-	}
-	started := false
+	// Until the gateway or the built-in terminal takes it over, the jump host login belongs to this function.
+	viaOwned := tgt.Via != nil
 	defer func() {
-		if !started {
-			fwd.Close()
+		if viaOwned {
+			tgt.Via.Close()
 		}
 	}()
 
@@ -380,6 +385,40 @@ func (s *Server) issueTicket(w http.ResponseWriter, r *http.Request, req session
 			}
 		}
 	}
+
+	jumpName := ""
+	if tgt.Via != nil {
+		if b, err := s.store.GetConnection(r.Context(), jumpIDOf(c.Settings)); err == nil {
+			jumpName = b.DeviceName
+		}
+	}
+	if c.Protocol == "ssh" && builtinTerminal(c.Settings) {
+		viaOwned = false // the terminal ticket owns it now
+		s.issueTerminalTicket(w, r, req, c, tgt, username, material, credName, jumpName)
+		return
+	}
+
+	// Through a jump host the gateway connects to a temporary local listener instead.
+	addr, port := tgt.Addr, tgt.Port
+	var fwd *jump.Forwarder
+	if tgt.Via != nil {
+		viaOwned = false // the forwarder closes it, or it is closed just below
+		f, err := s.startForwarder(tgt)
+		if err != nil {
+			tgt.Via.Close()
+			slog.Error("jump forwarder", "error", err)
+			writeError(w, http.StatusBadGateway, "jump_failed", "Could not prepare the jump host tunnel: "+err.Error())
+			return
+		}
+		fwd = f
+		addr, port = f.Addr()
+	}
+	started := false
+	defer func() {
+		if !started {
+			fwd.Close()
+		}
+	}()
 
 	drive := ""
 	if c.DeviceID != "" {
@@ -444,7 +483,10 @@ var upgrader = websocket.Upgrader{
 func (s *Server) handleTunnel(w http.ResponseWriter, r *http.Request) {
 	tk := s.tickets.take(r.URL.Query().Get("ticket"))
 	sess := sessionFrom(r.Context())
-	if tk == nil || tk.sessionID != sess.ID {
+	if tk == nil || tk.sessionID != sess.ID || tk.term != nil {
+		if tk != nil {
+			tk.release() // a ticket for the built-in terminal is not valid here
+		}
 		writeError(w, http.StatusForbidden, "invalid_ticket", "Invalid or expired session ticket")
 		return
 	}

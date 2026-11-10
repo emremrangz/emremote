@@ -75,13 +75,16 @@ type SSHSettings struct {
 	HostKey          string `json:"host_key"`
 	// AllowLegacyAlgorithms lets emremote's own SSH client (files, system overview, jump host,
 	// host key lookup) use old key exchange, cipher, MAC and host key algorithms.
-	AllowLegacyAlgorithms bool   `json:"allow_legacy_algorithms"`
-	FontName              string `json:"font_name"`
-	FontSize              int    `json:"font_size"`
-	ColorScheme           string `json:"color_scheme"`
-	Scrollback            int    `json:"scrollback"`
-	TerminalType          string `json:"terminal_type"`
-	ServerAliveInterval   int    `json:"server_alive_interval"`
+	AllowLegacyAlgorithms bool `json:"allow_legacy_algorithms"`
+	// Terminal chooses how the session is shown: "builtin" (the default, a terminal in the browser carried by
+	// emremote's own SSH client) or "gateway" (drawn by guacd, as before 0.1.21).
+	Terminal            string `json:"terminal"`
+	FontName            string `json:"font_name"`
+	FontSize            int    `json:"font_size"`
+	ColorScheme         string `json:"color_scheme"`
+	Scrollback          int    `json:"scrollback"`
+	TerminalType        string `json:"terminal_type"`
+	ServerAliveInterval int    `json:"server_alive_interval"`
 	// Backspace is the code the Backspace key sends: 127 (DEL) or 8 (BS).
 	Backspace int `json:"backspace"`
 	// Locale for the remote shell, for example en_US.UTF-8 ("" = server default).
@@ -259,6 +262,7 @@ func normalizeSettings(v *validator, protocol string, raw json.RawMessage) json.
 		between(v, "settings.server_alive_interval", s.ServerAliveInterval, 0, 3600)
 		v.oneOf("settings.color_scheme", s.ColorScheme, terminalSchemes...)
 		v.oneOf("settings.terminal_type", s.TerminalType, "xterm-256color", "xterm", "vt100", "vt220", "linux")
+		v.oneOf("settings.terminal", s.Terminal, "", "builtin", "gateway")
 		if s.Backspace != 127 && s.Backspace != 8 {
 			v.fail("settings.backspace", "Must be 127 (DEL) or 8 (BS)")
 		}

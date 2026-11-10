@@ -134,9 +134,13 @@ func (s *Server) handleWatchInfo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "This shared session has ended or the link is no longer valid.")
 		return
 	}
+	engine := "gateway"
+	if a.term != nil {
+		engine = "terminal"
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"device_name": a.DeviceName, "connection_name": a.ConnectionName, "protocol": a.Protocol,
-		"owner": a.Username, "started_at": a.StartedAt,
+		"owner": a.Username, "started_at": a.StartedAt, "engine": engine,
 	})
 }
 
@@ -146,6 +150,10 @@ func (s *Server) handleWatchTunnel(w http.ResponseWriter, r *http.Request) {
 	id, ok := s.shares.lookup(q.Get("token"))
 	if !ok {
 		writeError(w, http.StatusForbidden, "invalid_share", "This shared session has ended or the link is no longer valid.")
+		return
+	}
+	if a, live := s.tunnels.get(id); live && a.term != nil {
+		s.watchTerminal(w, r, id, a)
 		return
 	}
 	width, _ := strconv.Atoi(q.Get("width"))

@@ -144,6 +144,8 @@ func (s *Server) recordingConfig(ctx context.Context) recordingConfig {
 // recordingPlan is a session that will be recorded.
 type recordingPlan struct {
 	id string
+	// format is "guac" (written by the gateway) or "cast" (written by the built-in terminal).
+	format string
 }
 
 func newUUID() string {
@@ -157,6 +159,19 @@ func newUUID() string {
 
 // planRecording decides whether this session is recorded and, if so, adds the gateway's recording parameters.
 func (s *Server) planRecording(ctx context.Context, protocol, deviceID string, values map[string]string) *recordingPlan {
+	p := s.newRecordingPlan(ctx, protocol, deviceID, "guac")
+	if p == nil {
+		return nil
+	}
+	values["recording-path"] = s.cfg.RecordingsDir
+	values["recording-name"] = p.id
+	values["create-recording-path"] = "false"
+	values["recording-include-keys"] = "false"
+	return p
+}
+
+// newRecordingPlan decides whether a session is recorded; nil means it is not.
+func (s *Server) newRecordingPlan(ctx context.Context, protocol, deviceID, format string) *recordingPlan {
 	if !s.recordingConfig(ctx).shouldRecord(protocol, deviceID) {
 		return nil
 	}
@@ -164,12 +179,7 @@ func (s *Server) planRecording(ctx context.Context, protocol, deviceID string, v
 		slog.Warn("recording is on but the recordings folder is not writable; this session is not recorded", "dir", s.cfg.RecordingsDir)
 		return nil
 	}
-	id := newUUID()
-	values["recording-path"] = s.cfg.RecordingsDir
-	values["recording-name"] = id
-	values["create-recording-path"] = "false"
-	values["recording-include-keys"] = "false"
-	return &recordingPlan{id: id}
+	return &recordingPlan{id: newUUID(), format: format}
 }
 
 func (s *Server) recordingFile(id string) string { return filepath.Join(s.cfg.RecordingsDir, id) }
@@ -188,7 +198,7 @@ func (s *Server) recordingsWritable() bool {
 func (s *Server) beginRecording(ctx context.Context, p *recordingPlan, a *ActiveSession, started time.Time) {
 	x := &store.Recording{
 		ID: p.id, SessionID: a.ID, Username: a.Username, DeviceName: a.DeviceName, ConnectionName: a.ConnectionName,
-		Protocol: a.Protocol, StartedAt: started,
+		Protocol: a.Protocol, StartedAt: started, Format: p.format,
 	}
 	if a.UserID != "" {
 		x.UserID = &a.UserID

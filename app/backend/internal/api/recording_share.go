@@ -382,7 +382,11 @@ func (s *Server) handleRecordingFile(w http.ResponseWriter, r *http.Request) {
 			}
 			return r
 		}, x.DeviceName+"-"+x.StartedAt.UTC().Format("2006-01-02-150405"))
-		h.Set("Content-Disposition", `attachment; filename="`+name+`.guac"`)
+		ext := ".guac"
+		if x.Format == "cast" {
+			ext = ".cast"
+		}
+		h.Set("Content-Disposition", `attachment; filename="`+name+ext+`"`)
 	}
 	http.ServeContent(w, r, "", mod, rs)
 }

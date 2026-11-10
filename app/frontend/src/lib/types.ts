@@ -187,6 +187,8 @@ export interface SSHSettings {
   jump_connection_id: string;
   host_key: string;
   allow_legacy_algorithms: boolean;
+  /** "builtin" (or empty): the terminal in the browser; "gateway": drawn by guacd as before 0.1.21. */
+  terminal?: "" | "builtin" | "gateway";
   font_name: string;
   font_size: number;
   color_scheme: string;
@@ -602,4 +604,6 @@ export interface Recording {
   ended_at: string | null;
   size_bytes: number;
   location: "local" | "remote" | "both";
+  /** "guac": the gateway's screen recording; "cast": a built-in terminal recording (asciicast v2). */
+  format: "guac" | "cast";
 }

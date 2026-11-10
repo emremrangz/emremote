@@ -21,6 +21,8 @@ RUN apk add --no-cache openssl \
  && openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=emremote-test-target" \
       -keyout /etc/xrdp/key.pem -out /etc/xrdp/cert.pem \
  && sed -i 's|^certificate=.*|certificate=/etc/xrdp/cert.pem|; s|^key_file=.*|key_file=/etc/xrdp/key.pem|' /etc/xrdp/xrdp.ini
+# nano: the browser terminal test pastes an indented script into it (bracketed paste).
+RUN apk add --no-cache nano
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 EXPOSE 22 23 3389 5900

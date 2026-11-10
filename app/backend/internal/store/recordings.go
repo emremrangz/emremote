@@ -22,13 +22,15 @@ type Recording struct {
 	SizeBytes      int64      `json:"size_bytes"`
 	// Location is "local" (this server), "remote" (the network share) or "both".
 	Location string `json:"location"`
+	// Format is "guac" (the gateway's screen recording) or "cast" (a terminal recording in asciicast v2).
+	Format string `json:"format"`
 }
 
-const recordingCols = `id, session_id, user_id, username, device_id, device_name, connection_name, protocol, started_at, ended_at, size_bytes, location`
+const recordingCols = `id, session_id, user_id, username, device_id, device_name, connection_name, protocol, started_at, ended_at, size_bytes, location, format`
 
 func scanRecording(r pgx.Row) (*Recording, error) {
 	var x Recording
-	err := r.Scan(&x.ID, &x.SessionID, &x.UserID, &x.Username, &x.DeviceID, &x.DeviceName, &x.ConnectionName, &x.Protocol, &x.StartedAt, &x.EndedAt, &x.SizeBytes, &x.Location)
+	err := r.Scan(&x.ID, &x.SessionID, &x.UserID, &x.Username, &x.DeviceID, &x.DeviceName, &x.ConnectionName, &x.Protocol, &x.StartedAt, &x.EndedAt, &x.SizeBytes, &x.Location, &x.Format)
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -47,9 +49,12 @@ func collectRecordings(rows pgx.Rows, err error) ([]*Recording, error) {
 }
 
 func (s *Store) CreateRecording(ctx context.Context, x *Recording) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO recordings (id, session_id, user_id, username, device_id, device_name, connection_name, protocol, started_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		x.ID, x.SessionID, x.UserID, x.Username, x.DeviceID, x.DeviceName, x.ConnectionName, x.Protocol, x.StartedAt)
+	if x.Format == "" {
+		x.Format = "guac"
+	}
+	_, err := s.pool.Exec(ctx, `INSERT INTO recordings (id, session_id, user_id, username, device_id, device_name, connection_name, protocol, started_at, format)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		x.ID, x.SessionID, x.UserID, x.Username, x.DeviceID, x.DeviceName, x.ConnectionName, x.Protocol, x.StartedAt, x.Format)
 	return mapErr(err)
 }
 

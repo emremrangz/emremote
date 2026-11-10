@@ -116,13 +116,36 @@ Use TigerVNC (`tigervnc-standalone-server`) for virtual desktops, or `x11vnc` to
 display. Always set a VNC password (`vncpasswd`). VNC traffic itself is not encrypted, so use it only
 on networks you trust, or tunnel it.
 
+## The SSH terminal
+
+SSH connections open in the **built-in terminal**: it is drawn in the browser, so typing, scrolling and large outputs
+are as quick as in a desktop SSH client, and it behaves like PuTTY or MobaXterm:
+
+- **Select** with the mouse to copy (double-click a word, triple-click a line). **Right-click** pastes; with text
+  selected it only copies. The middle button also pastes.
+- **Ctrl+V** or **Shift+Insert** pastes, **Ctrl+Shift+C** or **Ctrl+Insert** copies (⌘V and ⌘C on a Mac). **Ctrl+C**
+  stays the interrupt key.
+- A paste arrives as **one bracketed paste** when the remote program asks for it (bash, zsh, nano, vim and most editors
+  do), so a script pasted into an editor keeps its indentation and the shell does not run pasted lines before you
+  press Enter.
+- **Ctrl+Shift+F** finds text in the terminal and its scrollback; **Ctrl +** and **Ctrl -** change the text size,
+  **Ctrl 0** resets it. Links are clickable.
+- Theme, font and size from the toolbar apply at once, without reconnecting.
+- When the session ends the output stays on screen to read and copy; **R** or **Enter** reconnects.
+- If no password is saved (or it is wrong), the terminal asks for the username and password; they are used for that
+  session only.
+
+The host key is checked against the one recorded on the first connection, as for files. For a device that misbehaves in
+the built-in terminal, set the connection's **Terminal** to **Gateway** to use the older terminal drawn by guacd
+(Telnet always uses that one).
+
 ## Copy and paste
 
 - **Paste from your computer:** press **Ctrl+V** (⌘V on a Mac, or Shift+Insert) in the session. The
   browser hands the text to emremote with that key press, so no permission is needed. emremote puts
   it on the remote clipboard and then sends the remote side's own paste shortcut: Ctrl+V on
-  Windows and Linux, ⌘V on macOS, and Ctrl+Shift+V in SSH/Telnet terminals.
-- **SSH and Telnet terminals:** selecting text with the mouse copies it. A right click while text is selected only
+  Windows and Linux, ⌘V on macOS, and Ctrl+Shift+V in the gateway's terminals (Telnet, or SSH set to Gateway).
+- **Telnet and the gateway's SSH terminal:** selecting text with the mouse copies it. A right click while text is selected only
   copies (and clears the selection); a right click with nothing selected pastes. This is how PuTTY and Windows
   Terminal behave, and it stops a copied command from being typed into the shell again.
 - **Right-click → Paste** on the remote side uses the remote clipboard, which holds whatever you last

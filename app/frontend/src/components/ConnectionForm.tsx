@@ -524,6 +524,16 @@ export function ConnectionFormDialog({
           </Field>
           {protocol === "ssh" && (
             <>
+              <Field
+                label="Terminal"
+                hint="Built-in: drawn in the browser, quick like a desktop SSH client, pastes keep their layout in editors, recorded as searchable text. Gateway: the older terminal drawn by guacd, for a device that misbehaves with the built-in one."
+                error={errors["settings.terminal"]}
+              >
+                <Select className="input" value={ssh.terminal === "gateway" ? "gateway" : "builtin"} onChange={(e) => upd<SSHSettings>({ terminal: e.target.value as "builtin" | "gateway" })}>
+                  <option value="builtin">Built-in (recommended)</option>
+                  <option value="gateway">Gateway (guacd)</option>
+                </Select>
+              </Field>
               <Field label="Backspace key sends" hint="Change if Backspace prints ^H or ^? on the server." error={errors["settings.backspace"]}>
                 <Select className="input" value={ssh.backspace} onChange={(e) => upd<SSHSettings>({ backspace: Number(e.target.value) })}>
                   <option value={127}>DEL (127), most servers</option>

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Terminal } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
 import { Link, useParams } from "react-router-dom";
 import { Eye } from "lucide-react";
 import { ApiError, errorMessage, get } from "@/lib/api";
@@ -6,6 +8,7 @@ import { loadGuacamole, ClientState, TunnelState, type GuacClient } from "@/lib/
 import { PageLoader } from "@/components/ui/Spinner";
 import { ProtocolBadge } from "@/components/Status";
 import { relativeTime } from "@/lib/format";
+import { xtermFont, xtermTheme } from "@/lib/xterm";
 import type { Protocol } from "@/lib/types";
 
 interface Info {
@@ -14,6 +17,8 @@ interface Info {
   protocol: Protocol;
   owner: string;
   started_at: string;
+  /** "terminal": a session in the built-in SSH terminal; "gateway": drawn by guacd. */
+  engine?: "terminal" | "gateway";
 }
 
 /** A shared session, watched read only (no input is ever sent). */
@@ -25,21 +30,52 @@ export default function WatchPage() {
   const viewport = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const clientRef = useRef<GuacClient | null>(null);
+  const info0 = useRef<Info | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     let client: GuacClient | null = null;
     let ro: ResizeObserver | null = null;
+    let term: Terminal | null = null;
+    let ws: WebSocket | null = null;
     (async () => {
       try {
         const i = await get<Info>(`/api/watch/${encodeURIComponent(token)}`);
         if (cancelled) return;
+        info0.current = i;
         setInfo(i);
         document.title = `Watching ${i.device_name} | emremote`;
       } catch (e) {
         if (cancelled) return;
         setMessage(e instanceof ApiError && e.status === 404 ? "This shared session has ended, or the link is no longer valid." : errorMessage(e));
         setPhase("error");
+        return;
+      }
+      if (info0.current?.engine === "terminal") {
+        // The built-in terminal: the owner's output, at the owner's size, nothing is ever sent back.
+        setPhase("connecting");
+        term = new Terminal({ disableStdin: true, cursorBlink: false, fontFamily: xtermFont(""), fontSize: 13, theme: xtermTheme("gray-black"), scrollback: 5000 });
+        term.open(host.current!);
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${proto}//${location.host}/api/watch-tunnel?${new URLSearchParams({ token })}`);
+        ws.binaryType = "arraybuffer";
+        ws.onmessage = (ev) => {
+          if (ev.data instanceof ArrayBuffer) {
+            term?.write(new Uint8Array(ev.data));
+            return;
+          }
+          try {
+            const m = JSON.parse(ev.data);
+            if (m.type === "size") {
+              term?.resize(m.cols, m.rows);
+              setPhase("live");
+            } else if (m.type === "exit") setPhase("ended");
+          } catch {
+            /* not a control message */
+          }
+        };
+        ws.onclose = () => setPhase((p) => (p === "loading" || p === "connecting" ? "error" : p === "error" ? p : "ended"));
+        setMessage("The shared session could not be joined, or it has ended.");
         return;
       }
       let G;
@@ -92,6 +128,8 @@ export default function WatchPage() {
     })();
     return () => {
       cancelled = true;
+      ws?.close();
+      term?.dispose();
       ro?.disconnect();
       try {
         client?.disconnect();
@@ -123,7 +161,7 @@ export default function WatchPage() {
         </span>
       </header>
       <div ref={viewport} className="relative min-h-0 flex-1 overflow-hidden">
-        <div ref={host} className="absolute inset-0 flex items-center justify-center" />
+        <div ref={host} className={info?.engine === "terminal" ? "absolute inset-0 overflow-auto bg-black p-1.5" : "absolute inset-0 flex items-center justify-center"} />
         {phase === "loading" && <PageLoader label="Opening shared session…" />}
         {(phase === "ended" || phase === "error") && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#05070a]/85 px-6 text-center">

@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { Power, RotateCw, X, ArrowLeft, AlertTriangle, Wifi, Lock } from "lucide-react";
 import { FileBrowser } from "@/components/FileBrowser";
-import { SSHAccessGate } from "@/components/SSHAccessGate";
 import { SnippetsPanel } from "@/components/SnippetsPanel";
 import { ShareDialog } from "@/components/ShareDialog";
 import { FloatingFileButton } from "@/components/FloatingFileButton";
 import { AreaSelect, type Region } from "@/components/AreaSelect";
 import { duration } from "@/lib/format";
 import { SessionToolbar, type Resolution } from "@/components/SessionToolbar";
-import { useSSHAccess } from "@/hooks/useSSHAccess";
-import type { Connection, Protocol, RDPSettings } from "@/lib/types";
+import { FullMessage, Overlay, SessionFiles } from "@/components/SessionParts";
+import { TerminalSessionView } from "./TerminalSession";
+import type { Protocol, RDPSettings } from "@/lib/types";
 import { connectionBase, isQuickConnection, useConnection } from "@/hooks/queries";
 import { ApiError, errorMessage, getCsrfToken, patch, post, put } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
@@ -29,7 +29,7 @@ import { OsIcon } from "@/components/OsIcon";
 import { Field } from "@/components/ui/Field";
 import { KEYBOARD_LAYOUTS, PROTOCOL_LABELS } from "@/lib/constants";
 
-type Phase = "loading" | "connecting" | "connected" | "disconnected" | "error";
+export type Phase = "loading" | "connecting" | "connected" | "disconnected" | "error";
 interface Prefs {
   /** "fit" scales the remote screen to the window; a number is a fixed zoom in percent. */
   zoom: "fit" | number;
@@ -102,8 +102,19 @@ export interface SessionViewProps {
   onClose?: () => void;
 }
 
-/** One remote session: display, toolbar and side panels. Several can live side by side in a workspace. */
-export function SessionView({ connectionId, active, embedded, onInfo, onActivate, onClose }: SessionViewProps) {
+/**
+ * One remote session: display, toolbar and side panels. Several can live side by side in a workspace. SSH connections
+ * open in the built-in terminal unless they are set to use the gateway's terminal.
+ */
+export function SessionView(props: SessionViewProps) {
+  const conn = useConnection(props.connectionId);
+  const c = conn.data;
+  if (c?.protocol === "ssh" && (c.settings as SSHSettings | undefined)?.terminal !== "gateway") return <TerminalSessionView {...props} conn={c} />;
+  return <GatewaySessionView {...props} />;
+}
+
+/** A session drawn by the gateway (guacd): RDP, VNC, Telnet, and SSH set to the gateway's terminal. */
+function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate, onClose }: SessionViewProps) {
   const embeddedRef = useRef(embedded);
   embeddedRef.current = embedded;
   const activeRef = useRef(active);
@@ -1289,56 +1300,6 @@ export function SessionView({ connectionId, active, embedded, onInfo, onActivate
       />
 
       {required && <RequiredDialog params={required} protocol={protocol} defaultUser={conn.data?.username ?? ""} onSubmit={submitRequired} onCancel={disconnect} />}
-    </div>
-  );
-}
-
-function SessionFiles({ conn }: { conn: Connection }) {
-  const { state, open, expired } = useSSHAccess(conn.id);
-  return (
-    <div className="min-h-0 flex-1">
-      <SSHAccessGate
-        compact
-        state={state}
-        onSubmitCredentials={open}
-        onRetry={() => open()}
-        onVerifyHostKey={() => window.open(`/devices/${conn.device_id}`, "emremote-main")}
-        defaultUsername={conn.username}
-      >
-        {(id) => <FileBrowser compact base={`/api/ssh-access/${id}/files`} onExpired={expired} />}
-      </SSHAccessGate>
-    </div>
-  );
-}
-
-function Overlay({ children, conn }: { children: ReactNode; conn?: Connection }) {
-  return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#05070a]/75 px-4 backdrop-blur-sm" data-no-capture>
-      <div className="flex w-full max-w-md flex-col items-center rounded-2xl border border-white/10 bg-[#0d1117]/90 px-8 py-8 text-center shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)] animate-fade-in">
-        {conn && (
-          <p className="mb-6 flex max-w-full flex-wrap items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 text-sm text-muted">
-            <OsIcon os={conn.device_os} distro={undefined} />
-            <span className="truncate font-medium text-fg">{conn.device_name}</span> <ProtocolBadge protocol={conn.protocol} />
-            <span className="font-mono text-2xs text-subtle">
-              {conn.device_address}:{conn.port}
-            </span>
-          </p>
-        )}
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function FullMessage({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center bg-bg px-6 text-center">
-      {icon}
-      <h1 className="mt-3 text-base font-semibold">{title}</h1>
-      <p className="mt-2 text-sm text-muted">{children}</p>
-      <Link to="/" className="mt-6 text-sm font-medium text-accent hover:underline">
-        Back to emremote
-      </Link>
     </div>
   );
 }

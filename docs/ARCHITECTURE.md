@@ -62,6 +62,29 @@ by emremote itself.
    password change, device or connection deletion, an expired browser session or an admin
    "Terminate" cancel the tunnel.
 
+## SSH sessions: the built-in terminal
+
+SSH connections open in the **built-in terminal** unless a connection is set to the gateway's terminal (connection
+settings, *Terminal*). guacd draws a terminal on the server and sends it as images, and its terminal does not support
+bracketed paste, so a script pasted into an editor such as nano arrives as typed lines and auto-indent shifts it. The
+built-in terminal avoids both:
+
+- The browser runs xterm.js (WebGL renderer, DOM fallback). Pastes are sent as one bracketed paste when the remote
+  program asks for it, so editors keep the text as it was.
+- emremote's own SSH client (`internal/sshhelper`, the same one files and system information use) carries the session,
+  with the pinned host key, the jump host and the legacy algorithm setting of the connection.
+- `POST /api/connections/{id}/sessions` signs in over SSH right away (a wrong password or a changed host key is answered
+  there, and a missing password is asked for in the browser and used for that session only) and keeps the open
+  connection in the one-time ticket. `wss://…/api/terminal?ticket=…&cols=…&rows=…` then starts a shell with a pseudo
+  terminal. Binary frames carry terminal data both ways; text frames carry `resize`, `ready` and `exit`.
+- The session is registered like a gateway session: it is listed, audited (`session.start`/`session.end` with
+  `"terminal": "builtin"`), ended by logout, password changes, an administrator or a vault check-in, and can be shared
+  read only. Watchers get the last 256 KB of output and then the live output; nothing they send is used.
+- Recordings are written by emremote as asciicast v2 (`format = cast`): screen output and size changes only, never the
+  keyboard.
+
+Telnet, RDP and VNC are unchanged and always go through guacd.
+
 ## File manager and system overview
 
 These features do not go through guacd. emremote opens its own SSH connection (`internal/sshhelper`),

@@ -6,6 +6,8 @@ It is off until an administrator turns it on in **Settings > Session recording**
 ## What is recorded
 
 - What the screen shows, and the mouse. The gateway (guacd) writes it to a file as the session runs.
+- SSH sessions in the built-in terminal are recorded by emremote as **text** (asciicast v2): what the server printed
+  and size changes, with their timing. They are small, play back sharp at any size and can be searched.
 - **Not the keyboard.** Keystrokes are never recorded, so a password typed at a hidden prompt is not captured.
   Anything the remote computer *displays* is recorded, though: a password echoed on screen, a secret in a document or
   a terminal listing. Treat recordings as sensitive data.
@@ -57,7 +59,16 @@ Windows, Synology, TrueNAS or a Linux kernel NFS server.
 
 ## Playback
 
-Open **Recordings**, choose a session and press play; the slider seeks. Recordings are in the gateway's own format
+Open **Recordings**, choose a session and press play; the slider seeks. The player highlights the pointer (a halo, a ring
+at every click, optionally a short trail) and marks the clicks and the busy moments on the timeline; the buttons next to
+the time jump to the previous or next click, back or forward 10 seconds, or to full screen. The highlight is drawn from the
+pointer events stored in the recording, so it works for RDP and VNC. The file is downloaded in full before playback
+starts, and recordings over 200 MB play without the highlight. There is no playback speed control for these. Recordings
+of the built-in SSH terminal are redrawn as text instead: they play at 1x to 8x, can shorten pauses longer than two
+seconds (**Skip pauses**, on by default), and **Find** lists every moment the session printed a word (for example `sudo`)
+and jumps there. **Download** offers them as a **Text transcript (.txt)**, the printed lines without colors and cursor
+movement (full-screen programs such as editors do not turn into tidy text), or as the **Terminal recording (.cast)**,
+which asciinema can play. The gateway's recordings are in its own format
 (`.guac`). **Download** offers a **Video (MP4)**: the video is made in your browser tab (the recording is replayed
 and encoded with the browser's video encoder, nothing is sent anywhere), so keep the tab open; a long recording takes a
 while and the picture is capped at 1920 pixels wide. The video uses H.264, or VP9 inside the same MP4 when the browser

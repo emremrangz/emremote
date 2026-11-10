@@ -369,6 +369,7 @@ func (s *Server) Handler() http.Handler {
 	a("GET /api/audit", s.handleListAudit)
 
 	a("GET /api/tunnel", s.handleTunnel)
+	a("GET /api/terminal", s.handleTerminal)
 
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "Unknown API endpoint")
