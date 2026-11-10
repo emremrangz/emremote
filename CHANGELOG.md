@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.20 (2026-11-10)
+
+- **Security updates of dependencies.** The database driver (pgx 5.12.0) fixes two high-severity issues; emremote does not
+  use the affected features (simple-protocol batches, `require_auth` and `channel_binding` settings), so this is
+  preventive.
+- Build images updated to Go 1.26.10 and Node 22.23.4; SFTP library 1.13.12 and several frontend packages (react-query,
+  react-router, autoprefixer, postcss, typescript-eslint) updated to their latest patch and minor versions.
+
 ## 0.1.19 (2026-10-29)
 
 - **Quick copy in the vault list:** each entry has copy buttons for the username, the password (or token) and the
