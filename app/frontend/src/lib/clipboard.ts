@@ -11,10 +11,10 @@
  * "gesture": the browser can read the clipboard only during a click and asks each time with its own Paste button
  * (Safari, recent Firefox); "granted" / "prompt" / "denied": Chromium's clipboard permission.
  */
-export type ReadState = "granted" | "prompt" | "denied" | "gesture" | "unsupported";
+type ReadState = "granted" | "prompt" | "denied" | "gesture" | "unsupported";
 
 /** Whether the page may read the clipboard without a paste event. */
-export async function clipboardReadState(): Promise<ReadState> {
+async function clipboardReadState(): Promise<ReadState> {
   if (!navigator.clipboard?.readText) return "unsupported";
   if (!navigator.permissions?.query) return "gesture";
   try {
@@ -25,11 +25,57 @@ export async function clipboardReadState(): Promise<ReadState> {
   }
 }
 
+// Shared view of clipboard read access for every session on the page. "refused" means a read failed although the
+// permission did not say "denied": Chrome reports "prompt" while it blocks a site by itself after its question was
+// closed without an answer a few times, so only a failed read tells.
+interface ReadAccess {
+  state: ReadState;
+  refused: boolean;
+}
+let access: ReadAccess = { state: "unsupported", refused: false };
+const listeners = new Set<() => void>();
+let watching = false;
+const setAccess = (next: Partial<ReadAccess>) => {
+  const merged = { ...access, ...next };
+  if (merged.state === "granted") merged.refused = false;
+  if (merged.state === access.state && merged.refused === access.refused) return;
+  access = merged;
+  listeners.forEach((l) => l());
+};
+const watch = () => {
+  if (watching) return;
+  watching = true;
+  void clipboardReadState().then((state) => setAccess({ state }));
+  navigator.permissions
+    ?.query({ name: "clipboard-read" as PermissionName })
+    .then((p) => p.addEventListener("change", () => setAccess({ state: p.state as ReadState })))
+    .catch(() => {});
+};
+
+// Start at once: the first right-click must not find the answer still pending.
+if (typeof navigator !== "undefined") watch();
+
+export function getReadAccess(): ReadAccess {
+  watch();
+  return access;
+}
+export function subscribeReadAccess(listener: () => void): () => void {
+  watch();
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+/** Whether a read may succeed (silently, or after the browser asks); false once the browser has refused. */
+export const mayRead = (a: ReadAccess = getReadAccess()) => a.state === "granted" || ((a.state === "prompt" || a.state === "gesture") && !a.refused);
+
 /** Reads text without a paste event. Only called where the browser allows it. */
 export async function readLocal(): Promise<string | null> {
   try {
-    return await navigator.clipboard.readText();
+    const text = await navigator.clipboard.readText();
+    setAccess({ refused: false });
+    return text;
   } catch {
+    setAccess({ refused: true });
+    void clipboardReadState().then((state) => setAccess({ state }));
     return null;
   }
 }

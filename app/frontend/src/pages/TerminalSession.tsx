@@ -23,7 +23,8 @@ import { useToast } from "@/components/ui/Toast";
 import { connectionBase, isQuickConnection } from "@/hooks/queries";
 import { ApiError, errorMessage, post } from "@/lib/api";
 import { useAccess } from "@/lib/auth";
-import { isMacClient } from "@/lib/clipboard";
+import { isMacClient, mayRead, readLocal } from "@/lib/clipboard";
+import { ClipboardAccess } from "@/components/ClipboardAccess";
 import { duration } from "@/lib/format";
 import { loadTerminalPrefs, saveTerminalPrefs, terminalRequest, type TerminalPrefs } from "@/lib/terminalPrefs";
 import { keysToSequence, xtermFont, xtermTheme } from "@/lib/xterm";
@@ -144,11 +145,12 @@ export function TerminalSessionView({ connectionId, conn, active, embedded, onIn
 
   const pasteFromClipboard = useCallback(async () => {
     if (cfgRef.current?.disable_paste) return;
-    try {
-      pasteText(await navigator.clipboard.readText());
-    } catch {
-      toast.info(`The browser did not allow reading the clipboard. Paste with ${isMacClient() ? "⌘V" : "Ctrl+V or Shift+Insert"} instead.`);
-    }
+    const text = await readLocal();
+    if (text !== null) pasteText(text);
+    else
+      toast.info(
+        `The browser did not allow reading the clipboard. Right-click again for the browser's own Paste, or press ${isMacClient() ? "⌘V" : "Ctrl+V"}. The Clipboard panel shows how to allow it.`,
+      );
   }, [pasteText, toast]);
 
   // ---- Connect ----
@@ -361,16 +363,23 @@ export function TerminalSessionView({ connectionId, conn, active, embedded, onIn
       const onMouseUp = (e: MouseEvent) => {
         if (e.button === 0) window.setTimeout(copySelection, 0);
       };
+      // Where the browser does not let the page read the clipboard (blocked, or not supported), right-click opens the
+      // browser's own menu instead: its Paste needs no permission and arrives as an ordinary paste.
       const onContextMenu = (e: MouseEvent) => {
-        e.preventDefault();
         if (term.hasSelection()) {
+          e.preventDefault();
           copySelection();
           term.clearSelection();
-        } else void pasteFromClipboard();
+        } else if (mayRead() && !cfgRef.current?.disable_paste) {
+          e.preventDefault();
+          void pasteFromClipboard();
+        } else if (cfgRef.current?.disable_paste) {
+          e.preventDefault();
+        }
         term.focus();
       };
       const onAuxClick = (e: MouseEvent) => {
-        if (e.button === 1) {
+        if (e.button === 1 && mayRead()) {
           e.preventDefault();
           void pasteFromClipboard();
         }
@@ -661,6 +670,7 @@ export function TerminalSessionView({ connectionId, conn, active, embedded, onIn
             <Button size="sm" variant="primary" disabled={phase !== "connected" || !clipText || !!cfg?.disable_paste} onClick={() => pasteText(clipText)}>
               Paste
             </Button>
+            <ClipboardAccess />
             <ul className="space-y-1 text-2xs leading-relaxed text-subtle">
               <li>Select with the mouse to copy. Right-click pastes; with text selected it only copies.</li>
               <li>{isMacClient() ? "⌘C / ⌘V" : "Ctrl+Shift+C copies, Ctrl+V or Shift+Insert pastes"}. Ctrl+C stays the interrupt key.</li>

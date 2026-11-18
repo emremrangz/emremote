@@ -160,6 +160,20 @@ await cd.getByRole("button", { name: "Cancel" }).click();
 
 const conns = await page.evaluate(async (id) => (await fetch(`/api/devices/${id}/connections`)).json(), deviceId);
 const byProto = Object.fromEntries(conns.map((c) => [c.protocol, c]));
+// This suite checks SSH through the gateway's terminal (guacd pixels, its clipboard and toolbar). The built-in terminal,
+// the default since 0.1.21, has its own suites: terminal.mjs and clipboard.mjs.
+{
+  const st = await page.evaluate(async (c) => {
+    const csrf = (await (await fetch("/api/auth/me")).json()).csrf_token;
+    const r = await fetch(`/api/connections/${c.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+      body: JSON.stringify({ name: c.name, protocol: c.protocol, port: c.port, username: c.username, domain: c.domain ?? "", credential_id: c.credential_id ?? null, settings: { ...c.settings, terminal: "gateway" }, secret: { mode: "keep" } }),
+    });
+    return r.status;
+  }, byProto.ssh);
+  check("SSH connection set to the gateway's terminal for this suite", st === 200, String(st));
+}
 await page.getByRole("button", { name: "More actions", exact: true }).click();
 await page.getByRole("menuitem", { name: "Check reachability now" }).click();
 await page.getByText("Reachable", { exact: true }).waitFor({ timeout: 15000 });

@@ -21,7 +21,9 @@
   including a paste into nano with auto-indent, copy on select and right-click paste. Firefox and Safari, the WebGL
   renderer on real graphics hardware, network equipment shells (Cisco, MikroTik, Juniper) and Windows' OpenSSH Server
   were not tested. Firefox and Safari do not let a page read the clipboard, so there right-click paste only works after
-  allowing it (or use Ctrl+V / Shift+Insert). Telnet still uses the gateway's terminal.
+  allowing it (or use Ctrl+V / Shift+Insert). Clipboard access refused or blocked by the browser was tested in headless
+  Chromium only; Chrome's own blocking after unanswered questions and the browser's context menu Paste were not tested
+  in a real desktop browser. Telnet still uses the gateway's terminal.
 - macOS Screen Sharing works through its VNC compatibility mode, which has lower image quality and
   performance than RDP.
 - The gateway decides frame rate and encoding. Expect an experience comparable to Guacamole: good

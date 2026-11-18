@@ -8,6 +8,7 @@
 #   tests/stack.sh recording   run tests/e2e/recording.mjs (records an SSH session and plays it back)
 #   tests/stack.sh workspace  run tests/e2e/workspace.mjs (New session picker, hidden toolbar)
 #   tests/stack.sh terminal   run tests/e2e/terminal.mjs (the built-in SSH terminal: typing, paste into nano, copy, recording)
+#   tests/stack.sh clipboard  run tests/e2e/clipboard.mjs (paste with and without the browser's clipboard read access)
 #   tests/stack.sh down       remove everything, including its data
 #
 # Needs Docker. Node and Playwright run in containers. LAN_IP is this machine's address (default: first one).
@@ -61,6 +62,9 @@ recording)
 terminal)
   cp tests/e2e/terminal.mjs "$P/pw/"; mkdir -p "$P/shots"
   docker run --rm --ipc=host -v "$P/pw:/w" -v "$P:/s" -w /w -e EMREMOTE_URL="https://$IP:8443" -e ADMIN_PASSWORD="$(cat "$P/admin_pw")" -e TARGET_HOST="$IP" -e TARGET_PASSWORD="$(cat "$P/target_pw")" -e CA_SPKI="$(cat "$P/spki")" mcr.microsoft.com/playwright:v1.48.2-noble node terminal.mjs 2>&1 | grep -E "FAIL|PASS|passed|PAGEERR|---|^[0-9a-f]{32}" ;;
+clipboard)
+  cp tests/e2e/clipboard.mjs "$P/pw/"
+  docker run --rm --ipc=host -v "$P/pw:/w" -v "$P:/s" -w /w -e EMREMOTE_URL="https://$IP:8443" -e ADMIN_PASSWORD="$(cat "$P/admin_pw")" -e TARGET_HOST="$IP" -e TARGET_PASSWORD="$(cat "$P/target_pw")" -e CA_SPKI="$(cat "$P/spki")" mcr.microsoft.com/playwright:v1.48.2-noble node clipboard.mjs 2>&1 | grep -E "FAIL|PASS|passed|PAGEERR|Error|permission" ;;
 workspace)
   cp tests/e2e/workspace.mjs "$P/pw/"; mkdir -p "$P/shots"; rm -f "$P/drop-now"
   # The test asks for a network drop by writing drop-now: restarting the proxy cuts the session's WebSocket.

@@ -50,6 +50,7 @@ are allowed.
 | Blurry text on a Retina/4K screen | Session toolbar → Display → **Native pixel density**, then raise display scaling on the remote computer. |
 | Esc or Win/⌘ keys are taken by the browser | Use **Fullscreen**: Chromium-based browsers then lock the keyboard for the remote session. Or use the toolbar keys (Esc, Win, CAD, held Ctrl/Alt/Shift/Win). |
 | Right-click → Paste on the remote side pastes old text | Firefox and Safari never let a page read the clipboard on a right-click, and Chrome does so only after you allow it once. Press Ctrl+V (⌘V) instead: it always pastes your current clipboard, and right-click pastes that text afterwards. |
+| Right-click in the SSH terminal says the browser did not allow reading the clipboard, or opens the browser's menu | The browser blocks clipboard access for the site. Chrome does this by itself after its permission question was closed without an answer a few times, while Site settings still says Ask. Click the icon left of the address, choose Reset permission (or set Clipboard to Allow), reload, and press Allow clipboard access in the session's Clipboard panel. Ctrl+V (⌘V) works either way. |
 | Paste does nothing on a sign-in screen | Those screens have no clipboard. Open the clipboard panel, enter the text and press **Type it**. |
 | No audio | Browsers start audio only after you interact with the page. Also check "Play remote audio" in the RDP advanced settings. |
 

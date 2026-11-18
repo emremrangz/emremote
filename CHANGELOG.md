@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.23 (2026-11-19)
+
+- **Right-click in RDP no longer asks for clipboard access, and no longer waits.** Since 0.1.22 a right click asked
+  Chrome for clipboard access and waited up to eight seconds for the answer. The remote menu that opened then closed
+  Chrome's question unanswered, and after a few of those Chrome blocked the clipboard for the whole site by itself, which
+  also broke right-click paste in the SSH terminal. A right click now reads this computer's clipboard only when access is
+  already allowed; the session's **Clipboard** panel has an **Allow clipboard access** button and explains how to undo a
+  block.
+- **Right-click in the SSH terminal works without clipboard access.** Where the browser refuses to let the page read the
+  clipboard, right-click opens the browser's own menu, whose Paste needs no permission, instead of only showing a hint.
+- **Pasting the same text again in RDP is reliable.** Ctrl+V and ⌘V sent the text to the remote clipboard on every
+  paste. Each update makes Windows replace its clipboard, and a paste that arrived meanwhile pasted nothing. Text the
+  remote clipboard already holds is no longer sent again, and new text gets a little more time (0.5 s) before the
+  remote paste shortcut.
+
 ## 0.1.22 (2026-11-18)
 
 - **Mac: ⌘ no longer presses the Windows key in RDP sessions.** ⌘ was sent as the Windows key the moment it went down,

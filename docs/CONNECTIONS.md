@@ -127,7 +127,10 @@ SSH connections open in the **built-in terminal**: it is drawn in the browser, s
 are as quick as in a desktop SSH client, and it behaves like PuTTY or MobaXterm:
 
 - **Select** with the mouse to copy (double-click a word, triple-click a line). **Right-click** pastes; with text
-  selected it only copies. The middle button also pastes.
+  selected it only copies. The middle button also pastes. Right-click reads your computer's clipboard, which the
+  browser allows only with clipboard access (Chrome and Edge ask once). Where the browser refuses, right-click opens the
+  browser's own menu instead: its **Paste** needs no permission. The **Clipboard** panel shows the current access and
+  how to allow it.
 - **Ctrl+V** or **Shift+Insert** pastes, **Ctrl+Shift+C** or **Ctrl+Insert** copies (⌘V and ⌘C on a Mac). **Ctrl+C**
   stays the interrupt key.
 - A paste arrives as **one bracketed paste** when the remote program asks for it (bash, zsh, nano, vim and most editors
@@ -154,10 +157,16 @@ the built-in terminal, set the connection's **Terminal** to **Gateway** to use t
   copies (and clears the selection); a right click with nothing selected pastes. This is how PuTTY and Windows
   Terminal behave, and it stops a copied command from being typed into the shell again.
 - **Right-click → Paste** on the remote side uses the remote clipboard, which holds whatever you last
-  pasted or copied. In Chrome and Edge, emremote also refreshes it from your computer when you
-  right-click; the browser asks once whether the site may see the clipboard, and after that it is
-  silent. Firefox and Safari never allow this, so there right-click pastes the text from your last
-  Ctrl+V.
+  pasted or copied. In Chrome and Edge, once clipboard access is allowed, emremote keeps the remote
+  clipboard in step with your computer's and refreshes it on a right click. A right click never asks
+  for access itself: the remote menu that opens would close the browser's question unanswered, and
+  after a few of those Chrome blocks the clipboard for the whole site by itself. Allow it with
+  **Allow clipboard access** in the session's **Clipboard** panel instead. Without access, right-click
+  pastes the text from your last Ctrl+V.
+- **If Chrome has blocked the clipboard** (right-click in SSH opens the browser's menu, the Clipboard
+  panel says it is blocked): click the icon left of the address, open Site settings and set Clipboard
+  to Allow. If it already says Ask, Chrome blocked it by itself: choose Reset permission, reload, and
+  press Allow clipboard access in the Clipboard panel.
 - **Copy on the remote side** (Ctrl+C in Windows, or selecting text in a terminal) and it is on your
   computer's clipboard. If the browser refuses at that moment, it is written on your next key press
   or click.

@@ -20,9 +20,10 @@ import { detectKeyboardLayout } from "@/lib/keyboard";
 import { useAccess } from "@/lib/auth";
 import { loadTerminalPrefs, saveTerminalPrefs, terminalRequest, type TerminalPrefs } from "@/lib/terminalPrefs";
 import type { SSHSettings } from "@/lib/types";
-import { clipboardReadState, execCopy, isMacClient, readLocal, textToKeysyms, writeLocal, type ReadState } from "@/lib/clipboard";
+import { execCopy, getReadAccess, isMacClient, readLocal, subscribeReadAccess, textToKeysyms, writeLocal } from "@/lib/clipboard";
 import { K, sessionProfile } from "@/lib/sessionProfile";
 import { Button } from "@/components/ui/Button";
+import { ClipboardAccess } from "@/components/ClipboardAccess";
 import { Spinner } from "@/components/ui/Spinner";
 import { ProtocolBadge } from "@/components/Status";
 import { OsIcon } from "@/components/OsIcon";
@@ -55,6 +56,8 @@ const RESOLUTIONS: Resolution[] = ["window", "monitor", "1280x720", "1600x900", 
 // not found (the socket was lost), upstream unavailable, and the browser's own receive timeout.
 const RETRY_CODES = new Set([0x0202, 0x0207, 0x0208, 0x0308]);
 const MAX_RETRIES = 3;
+// The right-click paste hint is shown once per page, not once per session.
+let rightClickHinted = false;
 const MODIFIERS = new Set([0xffe1, 0xffe2, 0xffe3, 0xffe4, 0xffe7, 0xffe8, 0xffe9, 0xffea, 0xffeb, 0xffec, 0xfe03]);
 
 function loadPrefs(): Prefs {
@@ -441,14 +444,17 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       display.oncursor = (canvas: HTMLCanvasElement, x: number, y: number) => {
         nativeCursor = mouse.setCursor(canvas, x, y);
       };
-      // Right-click paste: refresh the remote clipboard from this computer first,
-      // where the browser allows reading it (Chromium; asked once, then silent).
-      let readState: ReadState = "unsupported";
-      const refreshReadState = () => clipboardReadState().then((st) => (readState = st));
-      refreshReadState();
+      // Right-click paste: refresh the remote clipboard from this computer first, where the browser allows reading it
+      // without asking (Chromium, once allowed in the Clipboard panel) or with its own Paste button (Safari, Firefox).
+      // A right click never triggers Chrome's permission question: the remote menu that follows closes it unanswered,
+      // and after a few of those Chrome blocks the clipboard for the whole site (right-click paste in SSH included).
+      let readState = getReadAccess().state;
+      const unsubscribeAccess = subscribeReadAccess(() => (readState = getReadAccess().state));
+      cleanups.push(unsubscribeAccess);
+      // A new connection starts with an empty remote clipboard (RDP's is announced again by guacd).
+      lastSyncedRef.current = null;
       const syncFromLocal = async () => {
         const t = await readLocal();
-        refreshReadState();
         if (t && t !== lastSyncedRef.current && connectedRef.current) pushClipboard(t);
       };
       // Where reading is silent (Chromium, once allowed), keep the remote clipboard in step with this computer's: text
@@ -525,10 +531,15 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
           return;
         }
         flushMove();
-        if (e.type === "mousedown" && st.right && (readState === "granted" || readState === "prompt" || readState === "gesture")) {
+        if (e.type === "mousedown" && st.right && readState !== "granted" && readState !== "gesture" && !rightClickHinted) {
+          rightClickHinted = true; // once per page
+          toast.info(
+            `Right-click → Paste uses the remote clipboard. To paste what you copied on this computer, press ${isMacClient() ? "⌘V" : "Ctrl+V"}, or allow clipboard access in the Clipboard panel.`,
+          );
+        }
+        if (e.type === "mousedown" && st.right && (readState === "granted" || (readState === "gesture" && !getReadAccess().refused))) {
           // The right click reaches the remote side only once its clipboard holds what was copied on this computer, so
-          // its Paste uses that text. When the browser asks first (a permission prompt, or Safari's and Firefox's Paste
-          // button), the click waits for the answer.
+          // its Paste uses that text. Safari and Firefox show their own Paste button first; the click waits for it.
           queued.push(copy);
           const flush = () => {
             gate = null;
@@ -548,6 +559,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       // ---- Clipboard ----
       const profile = sessionProfile(conn.data!.protocol, conn.data!.device_os);
       const terminal = profile === "terminal";
+      const pasteDelay = terminal ? 50 : conn.data!.protocol === "rdp" ? 500 : 350;
       const pushClipboard = (text: string) => {
         lastSyncedRef.current = text;
         const writer = new Guacamole.StringWriter(client!.createClipboardStream("text/plain"));
@@ -559,7 +571,10 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       // retry on the next key press or click, which always allows copying.
       let pendingCopy: string | null = null;
       client.onclipboard = (stream: any, mimetype: string) => {
-        if (!/^text\//.test(mimetype)) return;
+        if (!/^text\//.test(mimetype)) {
+          lastSyncedRef.current = null; // the remote clipboard now holds something else
+          return;
+        }
         const reader = new Guacamole.StringReader(stream);
         let data = "";
         reader.ontext = (t: string) => (data += t);
@@ -650,9 +665,12 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
         pastePending = null;
         window.clearTimeout(timer);
         viewportRef.current?.focus({ preventScroll: true });
-        if (text) pushClipboard(text);
-        // Let the remote clipboard update before the keystroke (RDP announces it asynchronously).
-        const delay = text ? (terminal ? 50 : 350) : 0;
+        // Text the remote clipboard already holds is not sent again: each update makes Windows replace its clipboard,
+        // and a paste that lands while it does so pastes nothing. New text needs a moment to be announced (RDP does
+        // that asynchronously) before the keystroke.
+        const fresh = !!text && text !== lastSyncedRef.current;
+        if (fresh) pushClipboard(text);
+        const delay = fresh ? pasteDelay : 0;
         window.setTimeout(() => connectedRef.current && sendPasteKeys(keysym), delay);
       };
       const beginPaste = (keysym: number) => {
@@ -682,8 +700,9 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
         if (pastePending) finishPaste(text);
         else if (text && connectedRef.current) {
           // Paste from the browser's own menu.
-          pushClipboard(text);
-          window.setTimeout(() => sendPasteKeys(0x76), terminal ? 50 : 350);
+          const fresh = text !== lastSyncedRef.current;
+          if (fresh) pushClipboard(text);
+          window.setTimeout(() => connectedRef.current && sendPasteKeys(0x76), fresh ? pasteDelay : 0);
         }
       };
       document.addEventListener("paste", onPaste, true);
@@ -764,7 +783,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
 
       // Refresh the remote clipboard when coming back to this tab (only where reading is silent).
       const onFocus = () => {
-        if (readState === "granted" && activeRef.current) syncFromLocal();
+        if (readState === "granted" && activeRef.current) void syncFromLocal();
       };
       window.addEventListener("focus", onFocus);
       cleanups.push(() => window.removeEventListener("focus", onFocus));
@@ -1309,6 +1328,9 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
                 <Button size="sm" disabled={phase !== "connected" || !localClip} onClick={() => typeText(localClip)} title="Types the text key by key, for login screens and other places where paste does not work">
                   Type it
                 </Button>
+              </div>
+              <div className="mt-3">
+                <ClipboardAccess onText={(t) => { if (phase === "connected") void sendClipboard(t); }} />
               </div>
               <p className="mt-2 text-2xs text-subtle">
                 Usually not needed: {isMacClient() ? "⌘V" : "Ctrl+V"} in the session pastes from this computer directly.
