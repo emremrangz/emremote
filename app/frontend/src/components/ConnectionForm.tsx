@@ -420,7 +420,7 @@ export function ConnectionFormDialog({
               </Field>
               <Field label="JPEG quality" hint="0 (low) to 9 (high)">
                 <Select className="input" value={vnc.quality_level} onChange={(e) => upd<VNCSettings>({ quality_level: Number(e.target.value) })}>
-                  <option value={-1}>Server default</option>
+                  <option value={-1}>Automatic (8, sharp on a local network)</option>
                   {Array.from({ length: 10 }, (_, i) => (
                     <option key={i} value={i}>
                       {i}
@@ -430,7 +430,7 @@ export function ConnectionFormDialog({
               </Field>
               <Field label="Compression" hint="0 (fast) to 9 (small)">
                 <Select className="input" value={vnc.compress_level} onChange={(e) => upd<VNCSettings>({ compress_level: Number(e.target.value) })}>
-                  <option value={-1}>Server default</option>
+                  <option value={-1}>Automatic (2)</option>
                   {Array.from({ length: 10 }, (_, i) => (
                     <option key={i} value={i}>
                       {i}

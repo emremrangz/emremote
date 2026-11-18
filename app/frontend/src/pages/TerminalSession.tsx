@@ -113,7 +113,7 @@ export function TerminalSessionView({ connectionId, conn, active, embedded, onIn
     if (!embedded) document.title = `${title} | emremote`;
   }, [title, embedded]);
   useEffect(() => {
-    onInfo?.({ title, phase, protocol: conn.protocol });
+    onInfo?.({ title, phase, protocol: conn.protocol, os: conn.device_os, device: conn.device_name, method: conn.name });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, phase]);
 

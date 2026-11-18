@@ -450,12 +450,17 @@ func buildGuacdParams(t guacdTarget) (map[string]string, error) {
 			return nil, err
 		}
 		p["color-depth"] = strconv.Itoa(s.ColorDepth)
-		if s.QualityLevel >= 0 {
-			p["quality-level"] = strconv.Itoa(s.QualityLevel)
+		// Automatic (-1) means sharp pictures for a local network: without these the VNC library falls back to JPEG
+		// quality 5 and compression 3, which blurs text noticeably.
+		quality, compress := s.QualityLevel, s.CompressLevel
+		if quality < 0 {
+			quality = 8
 		}
-		if s.CompressLevel >= 0 {
-			p["compress-level"] = strconv.Itoa(s.CompressLevel)
+		if compress < 0 {
+			compress = 2
 		}
+		p["quality-level"] = strconv.Itoa(quality)
+		p["compress-level"] = strconv.Itoa(compress)
 		p["force-lossless"] = b(s.ForceLossless)
 		p["cursor"] = s.Cursor
 		p["swap-red-blue"] = b(s.SwapRedBlue)

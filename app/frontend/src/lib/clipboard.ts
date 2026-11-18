@@ -7,16 +7,21 @@
 // paths and fall back gracefully, so clipboard sync never depends on a
 // permission prompt.
 
-export type ReadState = "granted" | "prompt" | "denied" | "unsupported";
+/**
+ * "gesture": the browser can read the clipboard only during a click and asks each time with its own Paste button
+ * (Safari, recent Firefox); "granted" / "prompt" / "denied": Chromium's clipboard permission.
+ */
+export type ReadState = "granted" | "prompt" | "denied" | "gesture" | "unsupported";
 
-/** Whether the page may read the clipboard without a paste event (Chromium only). */
+/** Whether the page may read the clipboard without a paste event. */
 export async function clipboardReadState(): Promise<ReadState> {
-  if (!navigator.clipboard?.readText || !navigator.permissions?.query) return "unsupported";
+  if (!navigator.clipboard?.readText) return "unsupported";
+  if (!navigator.permissions?.query) return "gesture";
   try {
     const p = await navigator.permissions.query({ name: "clipboard-read" as PermissionName });
     return p.state as ReadState;
   } catch {
-    return "unsupported"; // Firefox and Safari do not expose this permission
+    return "gesture"; // Firefox and Safari do not expose this permission but read during a click
   }
 }
 

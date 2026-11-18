@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
-import { Columns2, ExternalLink, Grid2x2, Plus, Rows2, Square, X, Zap } from "lucide-react";
+import { Columns2, ExternalLink, Folder, Grid2x2, Plus, Rows2, Square, Star, X, Zap } from "lucide-react";
 import { SessionView, type SessionInfo } from "./Session";
 import { Dialog } from "@/components/ui/Dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/Button";
 import { OsIcon } from "@/components/OsIcon";
 import { ProtocolBadge } from "@/components/Status";
 import { QuickConnectDialog } from "@/components/QuickConnect";
-import { useConnections } from "@/hooks/queries";
+import { useDevices } from "@/hooks/queries";
 import { useAccess } from "@/lib/auth";
 import { launchStandalone, WORKSPACE_CHANNEL, WORKSPACE_NAME } from "@/lib/launch";
-import type { Connection, Protocol } from "@/lib/types";
+import type { OS, Protocol } from "@/lib/types";
 
 // The workspace: several remote sessions as tabs, shown one at a time or side by
 // side in 2 or 4 panes. Every session stays connected while hidden.
@@ -33,6 +33,9 @@ interface Tab {
   title: string;
   phase: SessionInfo["phase"];
   protocol?: Protocol;
+  os?: OS;
+  device?: string;
+  method?: string;
 }
 
 function loadLayout(): LayoutName {
@@ -63,26 +66,45 @@ function gridTemplate(layout: LayoutName): React.CSSProperties {
   return { gridTemplateColumns: `repeat(${c}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${r}, minmax(0, 1fr))` };
 }
 
-const dot = (t: Tab) =>
-  t.phase === "connected" ? "bg-success" : t.phase === "error" ? "bg-danger" : t.phase === "disconnected" ? "bg-subtle" : "bg-warning animate-pulse";
+/** The state of a tab that is not simply connected, shown as a small dot on its icon. */
+const stateDot = (t: Tab) =>
+  t.phase === "connected" ? null : t.phase === "error" ? "bg-danger" : t.phase === "disconnected" ? "bg-subtle" : "bg-warning animate-pulse";
+const stateLabel = (t: Tab) =>
+  t.phase === "connected" ? "connected" : t.phase === "error" ? "error" : t.phase === "disconnected" ? "ended" : "connecting";
 
-function NewSessionDialog({ open, onOpenChange, onPick, onQuick }: { open: boolean; onOpenChange: (o: boolean) => void; onPick: (c: Connection) => void; onQuick?: () => void }) {
-  const conns = useConnections();
+function NewSessionDialog({ open, onOpenChange, onPick, onQuick }: { open: boolean; onOpenChange: (o: boolean) => void; onPick: (connectionId: string) => void; onQuick?: () => void }) {
+  const devices = useDevices();
   const [q, setQ] = useState("");
+  const [group, setGroup] = useState("");
   useEffect(() => {
     if (open) setQ("");
   }, [open]);
+  const all = useMemo(() => (devices.data ?? []).filter((d) => d.connections.length > 0), [devices.data]);
+  const groups = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of all) for (const g of d.groups) m.set(g.id, g.name);
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [all]);
   const list = useMemo(() => {
     const n = q.trim().toLowerCase();
-    return (conns.data ?? []).filter((c) => !n || [c.device_name, c.name, c.device_address, c.protocol].some((x) => x.toLowerCase().includes(n))).slice(0, 80);
-  }, [conns.data, q]);
+    return all
+      .filter((d) => !group || d.groups.some((g) => g.id === group))
+      .filter(
+        (d) =>
+          !n ||
+          [d.name, d.hostname, d.address, d.facts?.os ?? "", ...d.tags, ...d.groups.map((g) => g.name), ...d.connections.map((c) => `${c.name} ${c.protocol}`)].some((x) =>
+            x.toLowerCase().includes(n),
+          ),
+      )
+      .slice(0, 100);
+  }, [all, q, group]);
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      size="md"
+      size="lg"
       title="New session"
-      description="Choose a device and connection method. It opens as a new tab."
+      description="Choose a device and how to connect. It opens as a new tab."
       footer={
         onQuick ? (
           <Button icon={<Zap className="h-4 w-4" />} onClick={onQuick}>
@@ -92,25 +114,67 @@ function NewSessionDialog({ open, onOpenChange, onPick, onQuick }: { open: boole
       }
       bodyClassName="p-0"
     >
-      <div className="border-b border-border p-3">
-        <input className="input" placeholder="Search devices…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus aria-label="Search devices" />
+      <div className="space-y-2 border-b border-border p-3">
+        <input className="input" placeholder="Search name, address, tag or group…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus aria-label="Search devices" />
+        {groups.length > 0 && (
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by group">
+            {[["", "All"] as [string, string], ...groups].map(([id, name]) => (
+              <button
+                key={id || "all"}
+                onClick={() => setGroup(id)}
+                aria-pressed={group === id}
+                className={clsx(
+                  "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                  group === id ? "border-accent/50 bg-accent/15 text-fg" : "border-border text-muted hover:bg-surface-2 hover:text-fg",
+                )}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      <ul className="max-h-[50vh] divide-y divide-border overflow-y-auto">
-        {list.map((c) => (
-          <li key={c.id}>
-            <button className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-2" onClick={() => onPick(c)}>
-              <OsIcon os={c.device_os} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{c.device_name}</span>
-                <span className="block truncate font-mono text-2xs text-subtle">
-                  {c.device_address}:{c.port}
-                </span>
+      <ul className="max-h-[55vh] divide-y divide-border overflow-y-auto">
+        {list.map((d) => (
+          <li key={d.id} className="flex items-center gap-3 px-4 py-2.5">
+            <OsIcon os={d.os} distro={d.facts?.os} boxed />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1.5">
+                {d.favorite && <Star className="h-3 w-3 shrink-0 fill-warning text-warning" aria-label="Favorite" />}
+                <span className="truncate text-sm font-medium">{d.name}</span>
               </span>
-              <ProtocolBadge protocol={c.protocol} />
-            </button>
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs text-subtle">
+                <span className="font-mono">{d.address}</span>
+                {d.groups.map((g) => (
+                  <span key={g.id} className="inline-flex items-center gap-0.5">
+                    <Folder className="h-3 w-3" />
+                    {g.name}
+                  </span>
+                ))}
+                {d.tags.map((t) => (
+                  <span key={t} className="rounded bg-surface-2 px-1.5 py-px text-muted">
+                    {t}
+                  </span>
+                ))}
+              </span>
+            </span>
+            <span className="flex shrink-0 flex-wrap justify-end gap-1">
+              {d.connections.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => onPick(c.id)}
+                  className="rounded-md border border-border px-1.5 py-1 hover:border-accent/50 hover:bg-surface-2"
+                  title={`Connect with ${c.name || c.protocol.toUpperCase()} (port ${c.port})`}
+                  aria-label={`Connect to ${d.name} with ${c.name || c.protocol}`}
+                >
+                  <ProtocolBadge protocol={c.protocol} />
+                </button>
+              ))}
+            </span>
           </li>
         ))}
-        {conns.data && list.length === 0 && <li className="px-4 py-6 text-center text-sm text-subtle">No connection methods match.</li>}
+        {devices.data && list.length === 0 && <li className="px-4 py-6 text-center text-sm text-subtle">No devices match.</li>}
+        {devices.isLoading && <li className="px-4 py-6 text-center text-sm text-subtle">Loading…</li>}
       </ul>
     </Dialog>
   );
@@ -217,8 +281,28 @@ export default function WorkspacePage() {
   };
 
   const onInfo = useCallback((key: string, info: SessionInfo) => {
-    setTabs((t) => t.map((x) => (x.key === key && (x.title !== info.title || x.phase !== info.phase || x.protocol !== info.protocol) ? { ...x, ...info } : x)));
+    setTabs((t) =>
+      t.map((x) =>
+        x.key === key && (x.title !== info.title || x.phase !== info.phase || x.protocol !== info.protocol || x.os !== info.os || x.device !== info.device)
+          ? { ...x, ...info }
+          : x,
+      ),
+    );
   }, []);
+
+  // Tabs can be put in another order by dragging them.
+  const dragKey = useRef<string | null>(null);
+  const moveTab = (from: string, before: string) => {
+    if (from === before) return;
+    setTabs((t) => {
+      const moving = t.find((x) => x.key === from);
+      if (!moving) return t;
+      const rest = t.filter((x) => x.key !== from);
+      const at = rest.findIndex((x) => x.key === before);
+      rest.splice(at < 0 ? rest.length : at, 0, moving);
+      return rest;
+    });
+  };
 
   const activeKey = slots[Math.min(activeSlot, n - 1)];
   const activeTab = tabs.find((t) => t.key === activeKey);
@@ -244,59 +328,110 @@ export default function WorkspacePage() {
 
   return (
     <div className="dark flex h-full flex-col bg-[#05070a] text-fg" data-workspace>
-      <header className="flex h-10 shrink-0 items-stretch gap-1 border-b border-white/10 bg-[#0b0d11] px-1.5" data-no-capture>
-        <a href="/" target="emremote-main" rel="noopener" className="flex items-center px-2 text-xs font-semibold text-muted hover:text-fg" title="Open emremote in its own window">
-          emremote
+      <header className="flex h-9 shrink-0 items-stretch border-b border-white/[0.08] bg-[#0b0d11]" data-no-capture>
+        <a
+          href="/"
+          target="emremote-main"
+          rel="noopener"
+          className="flex w-10 shrink-0 items-center justify-center border-r border-white/[0.06] opacity-80 hover:bg-white/[0.04] hover:opacity-100"
+          title="Open emremote in its own window"
+          aria-label="emremote"
+        >
+          <img src="/favicon.svg" alt="" className="h-4 w-4" />
         </a>
-        <div role="tablist" aria-label="Sessions" className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto pt-1.5">
+        <div role="tablist" aria-label="Sessions" className="flex min-w-0 flex-1 items-stretch overflow-x-auto [scrollbar-width:none]">
           {tabs.map((t) => {
             const slot = slots.indexOf(t.key);
             const shown = slot >= 0 && slot < n;
             const current = shown && slot === activeSlot;
+            const dotClass = stateDot(t);
+            const name = t.device ?? t.title;
             return (
               <div
                 key={t.key}
                 role="tab"
                 aria-selected={shown}
-                className={clsx(
-                  "group flex h-8 max-w-[220px] shrink-0 items-center gap-2 rounded-t-md border border-b-0 px-2.5 text-xs",
-                  current ? "border-white/15 bg-[#05070a] text-fg" : shown ? "border-white/10 bg-white/[0.04] text-fg" : "border-transparent text-muted hover:bg-white/5 hover:text-fg",
-                )}
+                draggable
+                onDragStart={(e) => {
+                  dragKey.current = t.key;
+                  e.dataTransfer.effectAllowed = "move";
+                }}
+                onDragOver={(e) => {
+                  if (dragKey.current) e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragKey.current) moveTab(dragKey.current, t.key);
+                  dragKey.current = null;
+                }}
+                onDragEnd={() => (dragKey.current = null)}
                 onAuxClick={(e) => e.button === 1 && askClose(t)}
+                className={clsx(
+                  "group relative flex w-52 min-w-[8.5rem] shrink items-center gap-1 border-r border-white/[0.06] pl-3 pr-1 text-[12px] select-none",
+                  current ? "bg-[#05070a] text-fg" : shown ? "bg-white/[0.025] text-fg/85" : "text-muted hover:bg-white/[0.03] hover:text-fg",
+                )}
               >
-                <button className="flex min-w-0 items-center gap-2" onClick={() => show(t.key)} title={t.title}>
-                  <span className={clsx("h-2 w-2 shrink-0 rounded-full", dot(t))} />
-                  <span className="truncate">{t.title}</span>
-                  {t.protocol && <ProtocolBadge protocol={t.protocol} className="shrink-0" />}
+                {current && <span className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden="true" />}
+                <button
+                  className="flex h-full min-w-0 flex-1 items-center gap-2 text-left outline-none"
+                  onClick={() => show(t.key)}
+                  title={`${name}${t.method ? ` · ${t.method}` : ""} (${stateLabel(t)})`}
+                >
+                  <span className="relative flex shrink-0 items-center">
+                    {t.os ? <OsIcon os={t.os} className="h-3.5 w-3.5" /> : <span className="h-3.5 w-3.5 rounded-sm bg-white/10" />}
+                    {dotClass && <span className={clsx("absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full ring-2 ring-[#0b0d11]", dotClass)} aria-hidden="true" />}
+                  </span>
+                  <span className={clsx("truncate", t.phase === "disconnected" && "text-subtle")}>{name}</span>
+                  {t.protocol && <span className="ml-auto shrink-0 pl-1 font-mono text-[10px] uppercase tracking-wide text-subtle">{t.protocol}</span>}
                 </button>
-                <button className="rounded p-0.5 text-subtle opacity-0 hover:bg-white/10 hover:text-fg group-hover:opacity-100 focus:opacity-100" onClick={() => popOut(t)} aria-label={`Open ${t.title} in its own window`} title="Open in its own window">
+                <button
+                  className="hidden h-5 w-5 shrink-0 items-center justify-center rounded text-subtle hover:bg-white/10 hover:text-fg group-hover:flex"
+                  onClick={() => popOut(t)}
+                  aria-label={`Open ${name} in its own window`}
+                  title="Open in its own window"
+                >
                   <ExternalLink className="h-3 w-3" />
                 </button>
-                <button className="rounded p-0.5 text-subtle hover:bg-white/10 hover:text-fg" onClick={() => askClose(t)} aria-label={`Close ${t.title}`} title="Close session">
-                  <X className="h-3 w-3" />
+                <button
+                  className={clsx(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded text-subtle hover:bg-white/10 hover:text-fg",
+                    !current && "opacity-0 focus:opacity-100 group-hover:opacity-100",
+                  )}
+                  onClick={() => askClose(t)}
+                  aria-label={`Close ${name}`}
+                  title="Close session (middle click)"
+                >
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
             );
           })}
           {can("sessions.connect") && (
-            <button className="mb-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted hover:bg-white/10 hover:text-fg" onClick={() => setPicking(true)} aria-label="New session" title="New session">
+            <button
+              className="flex w-9 shrink-0 items-center justify-center text-muted hover:bg-white/[0.04] hover:text-fg"
+              onClick={() => setPicking(true)}
+              aria-label="New session"
+              title="New session"
+            >
               <Plus className="h-4 w-4" />
             </button>
           )}
         </div>
-        <div className="flex items-center gap-0.5 px-1" role="group" aria-label="Layout">
-          {LAYOUTS.map((l) => (
-            <button
-              key={l.name}
-              onClick={() => setLayout(l.name)}
-              aria-pressed={layout === l.name}
-              aria-label={l.label}
-              title={l.label}
-              className={clsx("flex h-7 w-7 items-center justify-center rounded-md", layout === l.name ? "bg-white/15 text-fg" : "text-muted hover:bg-white/10 hover:text-fg")}
-            >
-              <l.icon className="h-4 w-4" />
-            </button>
-          ))}
+        <div className="flex items-center border-l border-white/[0.06] px-2" role="group" aria-label="Layout">
+          <div className="flex items-center rounded-md border border-white/[0.08] p-0.5">
+            {LAYOUTS.map((l) => (
+              <button
+                key={l.name}
+                onClick={() => setLayout(l.name)}
+                aria-pressed={layout === l.name}
+                aria-label={l.label}
+                title={l.label}
+                className={clsx("flex h-6 w-6 items-center justify-center rounded", layout === l.name ? "bg-white/[0.12] text-fg" : "text-subtle hover:text-fg")}
+              >
+                <l.icon className="h-3.5 w-3.5" />
+              </button>
+            ))}
+          </div>
         </div>
       </header>
       {notice && (
@@ -353,7 +488,7 @@ export default function WorkspacePage() {
           ))}
       </div>
 
-      <NewSessionDialog open={picking} onOpenChange={setPicking} onPick={(c) => addTab(c.id)} onQuick={can("quick.connect") ? () => { setPicking(false); setQuick(true); } : undefined} />
+      <NewSessionDialog open={picking} onOpenChange={setPicking} onPick={(id) => addTab(id)} onQuick={can("quick.connect") ? () => { setPicking(false); setQuick(true); } : undefined} />
       <QuickConnectDialog open={quick} onOpenChange={setQuick} onLaunch={addTab} />
       <ConfirmDialog
         open={!!closing}

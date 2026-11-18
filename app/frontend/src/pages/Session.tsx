@@ -11,7 +11,7 @@ import { duration } from "@/lib/format";
 import { SessionToolbar, type Resolution } from "@/components/SessionToolbar";
 import { FullMessage, Overlay, SessionFiles } from "@/components/SessionParts";
 import { TerminalSessionView } from "./TerminalSession";
-import type { Protocol, RDPSettings } from "@/lib/types";
+import type { OS, Protocol, RDPSettings } from "@/lib/types";
 import { connectionBase, isQuickConnection, useConnection } from "@/hooks/queries";
 import { ApiError, errorMessage, getCsrfToken, patch, post, put } from "@/lib/api";
 import { useToast } from "@/components/ui/Toast";
@@ -51,6 +51,10 @@ const MAX_PIXELS = 3840 * 2400;
 
 const DEFAULT_PREFS: Prefs = { zoom: "fit", resolution: "window", density: "auto" };
 const RESOLUTIONS: Resolution[] = ["window", "monitor", "1280x720", "1600x900", "1920x1080", "2560x1440", "3840x2160"];
+// Gateway status codes of a dropped connection (rather than a session ended on purpose): upstream timeout, upstream
+// not found (the socket was lost), upstream unavailable, and the browser's own receive timeout.
+const RETRY_CODES = new Set([0x0202, 0x0207, 0x0208, 0x0308]);
+const MAX_RETRIES = 3;
 const MODIFIERS = new Set([0xffe1, 0xffe2, 0xffe3, 0xffe4, 0xffe7, 0xffe8, 0xffe9, 0xffea, 0xffeb, 0xffec, 0xfe03]);
 
 function loadPrefs(): Prefs {
@@ -87,6 +91,10 @@ export interface SessionInfo {
   title: string;
   phase: Phase;
   protocol?: Protocol;
+  os?: OS;
+  /** Device and connection method names, for the workspace's tabs. */
+  device?: string;
+  method?: string;
 }
 
 export interface SessionViewProps {
@@ -166,6 +174,12 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
   const connectedRef = useRef(false);
   // Last text known to be on the remote clipboard (avoids echoing it back).
   const lastSyncedRef = useRef<string | null>(null);
+  // Automatic reconnects after a dropped connection.
+  const everConnectedRef = useRef(false);
+  const userClosedRef = useRef(false);
+  const retryingRef = useRef(false);
+  const retriesRef = useRef(0);
+  const retryResetRef = useRef(0);
   const pasteSinkRef = useRef<HTMLTextAreaElement>(null);
 
   const protocol = conn.data?.protocol;
@@ -228,7 +242,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
   }, [title, embedded]);
 
   useEffect(() => {
-    onInfo?.({ title, phase, protocol });
+    onInfo?.({ title, phase, protocol, os: conn.data?.device_os, device: conn.data?.device_name, method: conn.data?.name });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, phase, protocol]);
 
@@ -284,11 +298,13 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
     let keyboard: any = null;
     const cleanups: (() => void)[] = [];
 
+    retryingRef.current = false;
+    userClosedRef.current = false;
     (async () => {
-      setPhase("loading");
+      setPhase((p) => (p === "connecting" ? p : "loading"));
       setError(null);
       setRequired(null);
-      setPhaseDetail("Loading remote display client…");
+      if (!retriesRef.current) setPhaseDetail("Loading remote display client…");
       let Guacamole: any;
       try {
         Guacamole = await loadGuacamole();
@@ -299,7 +315,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       }
       if (cancelled) return;
 
-      setPhaseDetail("Authorizing session…");
+      if (!retriesRef.current) setPhaseDetail("Authorizing session…");
       const size = computeSize();
       const layout = await detectKeyboardLayout();
       setKeyboardLayout(layout);
@@ -317,6 +333,13 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
         ticket = r.ticket;
         setRecording(!!r.recording);
       } catch (e) {
+        // While reconnecting after a drop, the network may still be down: keep trying (not for a refusal by the server).
+        if (retriesRef.current > 0 && retriesRef.current < MAX_RETRIES && !(e instanceof ApiError && e.status < 500) && !cancelled) {
+          retriesRef.current += 1;
+          setPhaseDetail(`The connection dropped. Reconnecting (${retriesRef.current} of ${MAX_RETRIES})…`);
+          window.setTimeout(() => setAttempt((a) => a + 1), 1500 * retriesRef.current);
+          return;
+        }
         const msg = e instanceof ApiError && e.code === "target_not_allowed"
           ? { title: "This target is blocked by the server's network policy.", hint: "See EMREMOTE_ALLOWED_TARGET_NETWORKS in docs/SECURITY.md.", detail: e.message }
           : { title: "Could not start the session.", detail: errorMessage(e) };
@@ -327,7 +350,9 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       if (cancelled) return;
 
       setPhase("connecting");
-      setPhaseDetail(`Connecting to ${conn.data!.device_name}…`);
+      setPhaseDetail(
+        retriesRef.current ? `Reconnecting to ${conn.data!.device_name} (${retriesRef.current} of ${MAX_RETRIES})…` : `Connecting to ${conn.data!.device_name}…`,
+      );
 
       const tunnel = new Guacamole.WebSocketTunnel("/api/tunnel");
       tunnelRef.current = tunnel;
@@ -361,7 +386,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       tunnel.onstatechange = (s: number) => {
         setUnstable(s === TunnelState.UNSTABLE);
         // The gateway closing the socket (the session was terminated or the server restarted).
-        if (s === TunnelState.CLOSED) setPhase((p) => (p === "connected" || p === "connecting" ? "disconnected" : p));
+        if (s === TunnelState.CLOSED && !retryingRef.current) setPhase((p) => (p === "connected" || p === "connecting" ? "disconnected" : p));
       };
 
       client.onstatechange = (s: number) => {
@@ -369,14 +394,36 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
         canResizeRef.current = s === ClientState.CONNECTED && conn.data!.protocol !== "vnc";
         connectedRef.current = s === ClientState.CONNECTED;
         if (s === ClientState.CONNECTED) {
+          everConnectedRef.current = true;
+          // A session that stayed up for a minute earns a fresh set of automatic reconnects.
+          window.clearTimeout(retryResetRef.current);
+          retryResetRef.current = window.setTimeout(() => (retriesRef.current = 0), 60000);
           setPhase("connected");
           setError(null);
           setTimeout(rescale, 0);
           if (activeRef.current) viewportRef.current?.focus();
         }
-        if (s === ClientState.DISCONNECTED) setPhase((p) => (p === "error" ? p : "disconnected"));
+        if (s === ClientState.DISCONNECTED && !retryingRef.current) setPhase((p) => (p === "error" ? p : "disconnected"));
+      };
+      // The network dropped (no answer, socket lost, gateway gone for a moment) after the session had been up: try
+      // again by itself a few times. RDP then returns to the same Windows session. A session ended on purpose
+      // (by an administrator, the remote side or someone taking it over) or refused credentials is not retried.
+      const retryAfterDrop = (code: number) => {
+        if (!everConnectedRef.current || userClosedRef.current || retryingRef.current || !RETRY_CODES.has(code) || retriesRef.current >= MAX_RETRIES) return false;
+        retriesRef.current += 1;
+        retryingRef.current = true;
+        connectedRef.current = false;
+        setPhase("connecting");
+        setPhaseDetail(`The connection dropped. Reconnecting (${retriesRef.current} of ${MAX_RETRIES})…`);
+        window.setTimeout(() => setAttempt((a) => a + 1), 1500 * retriesRef.current);
+        return true;
+      };
+      // A lost socket is reported by the tunnel (before it closes), not by the client.
+      tunnel.onerror = (status: { code: number }) => {
+        retryAfterDrop(status.code);
       };
       client.onerror = (status: any) => {
+        if (retryAfterDrop(status.code)) return;
         const m = statusMessage(status.code, conn.data!.protocol);
         setError({ ...m, detail: status.message && status.message !== String(status.code) ? status.message : undefined });
         setPhase("error");
@@ -404,6 +451,12 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
         refreshReadState();
         if (t && t !== lastSyncedRef.current && connectedRef.current) pushClipboard(t);
       };
+      // Where reading is silent (Chromium, once allowed), keep the remote clipboard in step with this computer's: text
+      // copied in another window is there before anything on the remote side pastes it.
+      const poll = window.setInterval(() => {
+        if (readState === "granted" && activeRef.current && connectedRef.current && document.hasFocus()) void syncFromLocal();
+      }, 1500);
+      cleanups.push(() => window.clearInterval(poll));
       let gate: Promise<void> | null = null;
       const queued: any[] = [];
       // The terminal in the gateway copies a selection when the button is released and pastes on a right click. Like
@@ -427,6 +480,16 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
           leftDownAt = null;
         }
       };
+      let pendingMove: { x: number; y: number; left: boolean; middle: boolean; right: boolean; up: boolean; down: boolean } | null = null;
+      let moveFrame = 0;
+      const flushMove = () => {
+        if (moveFrame) cancelAnimationFrame(moveFrame);
+        moveFrame = 0;
+        const m = pendingMove;
+        pendingMove = null;
+        if (m && client) client.sendMouseState(m, true);
+      };
+      cleanups.push(() => moveFrame && cancelAnimationFrame(moveFrame));
       const sendMouse = (e: any) => {
         display.showCursor(!nativeCursor);
         const st = e.state;
@@ -454,14 +517,25 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
           queued.push(copy);
           return;
         }
-        if (e.type === "mousedown" && st.right && (readState === "granted" || readState === "prompt")) {
+        // Moves are sent at most once per frame (only the latest position): a fast mouse otherwise sends hundreds of
+        // messages a second that the remote side has to work through. Presses and releases go at once, after the move.
+        if (e.type === "mousemove") {
+          pendingMove = copy;
+          if (!moveFrame) moveFrame = requestAnimationFrame(flushMove);
+          return;
+        }
+        flushMove();
+        if (e.type === "mousedown" && st.right && (readState === "granted" || readState === "prompt" || readState === "gesture")) {
+          // The right click reaches the remote side only once its clipboard holds what was copied on this computer, so
+          // its Paste uses that text. When the browser asks first (a permission prompt, or Safari's and Firefox's Paste
+          // button), the click waits for the answer.
           queued.push(copy);
           const flush = () => {
             gate = null;
             queued.splice(0).forEach((q) => client!.sendMouseState(q, true));
           };
-          const wait = new Promise<void>((r) => setTimeout(r, readState === "granted" ? 300 : 150));
-          gate = Promise.race([syncFromLocal(), wait]).then(flush, flush);
+          const wait = new Promise<void>((r) => setTimeout(r, readState === "granted" ? 500 : 8000));
+          gate = Promise.race([syncFromLocal().then(() => new Promise<void>((r) => setTimeout(r, 120))), wait]).then(flush, flush);
           return;
         }
         client!.sendMouseState(copy, true);
@@ -527,6 +601,9 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       const isMeta = (k: number) => k === 0xffe7 || k === 0xffe8 || k === 0xffeb || k === 0xffec;
       const swallowed = new Set<number>(); // key-ups that must not be forwarded
       const remapped = new Map<number, number[]>(); // ⌘+key sent as Ctrl+key → the ⌘ keys released
+      // On a Mac, ⌘ is held back until the next key says what it is for. Sent at once it would be the Windows key, and
+      // Windows opens the Start menu whenever that key goes down and up with nothing in between (⌘V, ⌘C, ⌘Tab all did).
+      let cmdHeld: number[] = [];
 
       /** The remote side's own paste shortcut, sent once its clipboard holds the text. */
       const sendPasteKeys = (keysym: number) => {
@@ -623,9 +700,14 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
       keyboard.onkeydown = (keysym: number) => {
         if (!activeRef.current || selectingRef.current) return true; // another pane has the keyboard, or an area is being chosen
         if (isTypingTarget(document.activeElement)) return true;
+        if (remapCmd && isMeta(keysym)) {
+          if (!cmdHeld.includes(keysym)) cmdHeld.push(keysym);
+          return false;
+        }
         const m = keyboard.modifiers;
         const isV = keysym === 0x76 || keysym === 0x56;
         if ((isV && (m.ctrl || m.meta) && !m.alt) || (keysym === 0xff63 && m.shift && !m.ctrl && !m.alt)) {
+          cmdHeld = []; // this ⌘ was for pasting
           beginPaste(keysym);
           return true; // let the browser fire its paste event
         }
@@ -635,6 +717,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
             return false;
           }
           if (remapCmd) {
+            cmdHeld = []; // this ⌘ was for a shortcut
             const metas = [...down].filter(isMeta);
             metas.forEach(release);
             press(K.Ctrl);
@@ -643,12 +726,22 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
             return false;
           }
         }
+        // ⌘ with a key that is not a shortcut (an arrow, for example): it was meant as the Windows key after all.
+        if (cmdHeld.length) {
+          cmdHeld.forEach(press);
+          cmdHeld = [];
+        }
         press(keysym);
         return false;
       };
       keyboard.onkeyup = (keysym: number) => {
         if (!activeRef.current) return;
         if (swallowed.delete(keysym)) return;
+        if (remapCmd && isMeta(keysym)) {
+          // ⌘ that was never sent stays unsent: ⌘ alone does nothing (the toolbar has the Windows key).
+          cmdHeld = cmdHeld.filter((k) => k !== keysym);
+          if (!down.has(keysym)) return;
+        }
         if (isTypingTarget(document.activeElement)) return;
         const metas = remapped.get(keysym);
         if (metas) {
@@ -662,7 +755,10 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
         // Toolbar modifiers stay held for exactly one ordinary key.
         if (!MODIFIERS.has(keysym) && latchedRef.current.size) releaseLatched();
       };
-      const onBlur = () => keyboard?.reset();
+      const onBlur = () => {
+        cmdHeld = [];
+        keyboard?.reset();
+      };
       window.addEventListener("blur", onBlur);
       cleanups.push(() => window.removeEventListener("blur", onBlur));
 
@@ -914,6 +1010,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
 
 
   const disconnect = () => {
+    userClosedRef.current = true;
     clientRef.current?.disconnect();
     setPhase("disconnected");
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -940,6 +1037,7 @@ function GatewaySessionView({ connectionId, active, embedded, onInfo, onActivate
   };
 
   const reconnect = () => {
+    retriesRef.current = 0;
     setError(null);
     setAttempt((a) => a + 1);
   };

@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.22 (2026-11-18)
+
+- **Mac: ⌘ no longer presses the Windows key in RDP sessions.** ⌘ was sent as the Windows key the moment it went down,
+  so ⌘V, ⌘C or ⌘Tab let Windows see the key go down and up alone and open the Start menu. ⌘ now waits for the next key:
+  ⌘V, ⌘C and other shortcuts become Ctrl shortcuts, ⌘ alone does nothing (the toolbar has the Windows key).
+- **Text copied on this computer reaches the remote clipboard more reliably.** In Chrome and Edge (once clipboard access
+  is allowed) the remote clipboard follows this computer's every few seconds, so right-click → Paste on the remote side
+  uses what was just copied in another window. A right click waits until the remote clipboard has the text, including
+  while the browser asks for permission. Safari and Firefox now read the clipboard on a right click too, after their own
+  Paste confirmation.
+- **Hidden toolbar:** a small arrow stays at the top. Pointing at it shows the toolbar until the pointer leaves; clicking
+  it brings the toolbar back.
+- **New session** (workspace) lists devices with their operating system or distribution logo, favorites, groups and
+  tags, one button per connection method, a filter by group, and search by tag or group.
+- **Workspace tabs redesigned:** flat tabs with the device's logo, name and protocol, a thin accent on the active tab, a
+  small state dot only when a session is not connected, drag to reorder, and a compact layout switch.
+- **Connections reconnect after a drop.** When the network drops for a moment, RDP and VNC sessions reconnect by
+  themselves (up to three times; RDP returns to the same Windows session). Sessions ended on purpose are not retried.
+- **Smoother pointer:** mouse movement is sent at most once per screen frame instead of on every event, which keeps
+  sessions responsive with high-rate mice and on slower links.
+- **Sharper VNC by default:** *Automatic* picture quality is now 8 with compression 2 instead of the VNC library's
+  fallback of 5 and 3, which blurred text.
+
 ## 0.1.21 (2026-11-10)
 
 - **New SSH terminal, drawn in the browser.** SSH sessions now open in a built-in terminal (xterm.js) carried by

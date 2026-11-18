@@ -144,6 +144,18 @@ function Group({ label, children }: { label: string; children: ReactNode }) {
  */
 export function SessionToolbar(p: ToolbarProps) {
   const [place, setPlace] = useState<Placement>(loadPlacement);
+  // While hidden, pointing at the arrow at the top shows the toolbar for a moment.
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef(0);
+  const startPeek = () => {
+    window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => setPeek(true), 200);
+  };
+  const cancelPeek = () => window.clearTimeout(peekTimer.current);
+  const endPeek = () => {
+    window.clearTimeout(peekTimer.current);
+    peekTimer.current = window.setTimeout(() => setPeek(false), 400);
+  };
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ dx: number; dy: number } | null>(null);
   // The toolbar floats inside whatever area it is placed in (the whole window, or one
@@ -164,6 +176,7 @@ export function SessionToolbar(p: ToolbarProps) {
   }, []);
 
   const save = (n: Placement) => {
+    if (n.hidden) setPeek(false);
     setPlace(n);
     try {
       localStorage.setItem(STORE, JSON.stringify(n));
@@ -267,20 +280,29 @@ export function SessionToolbar(p: ToolbarProps) {
     </span>
   );
 
-  if (place.hidden)
+  // Hidden: a small arrow stays at the top. Pointing at it shows the toolbar for as long as the pointer is on it
+  // (it hides again afterwards); clicking the arrow brings the toolbar back for good.
+  if (place.hidden && !peek)
     return (
-      // Invisible strip at the top edge; hovering it reveals a small handle.
       <>
       <div ref={anchor} className="pointer-events-none absolute inset-0 -z-10" aria-hidden="true" />
-      <div data-no-capture className="group absolute left-1/2 top-0 z-30 flex h-6 w-56 -translate-x-1/2 items-start justify-center">
+      <div
+        data-no-capture
+        className="absolute left-1/2 top-0 z-30 flex h-3 w-72 -translate-x-1/2 justify-center"
+        onMouseEnter={startPeek}
+        onMouseLeave={cancelPeek}
+      >
         <button
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => save({ ...place, hidden: false })}
-          title="Show toolbar (Ctrl+Alt+Shift+T)"
+          onClick={() => {
+            cancelPeek();
+            save({ ...place, hidden: false });
+          }}
+          title="Show the toolbar (Ctrl+Alt+Shift+T). Point here to see it for a moment."
           aria-label="Show toolbar"
-          className="flex h-5 items-center gap-1 rounded-b-lg border border-t-0 border-white/10 bg-[#111317]/95 px-3 text-[11px] text-muted opacity-0 shadow-lg transition-opacity duration-150 hover:text-fg focus:opacity-100 group-hover:opacity-100"
+          className="flex h-4 items-center rounded-b-md border border-t-0 border-white/15 bg-[#111317]/80 px-2.5 text-muted opacity-70 shadow-lg transition-opacity duration-150 hover:text-fg hover:opacity-100 focus:opacity-100"
         >
-          <ChevronDown className="h-3.5 w-3.5" /> Toolbar
+          <ChevronDown className="h-3.5 w-3.5" />
         </button>
       </div>
       </>
@@ -294,7 +316,9 @@ export function SessionToolbar(p: ToolbarProps) {
       data-no-capture
       role="toolbar"
       aria-label="Session toolbar"
-      style={{ left: x, top: place.y, transform: "translateX(-50%)", maxWidth: box.w - left - right - 8 }}
+      style={{ left: place.hidden ? areaCentre() : x, top: place.hidden ? 4 : place.y, transform: "translateX(-50%)", maxWidth: box.w - left - right - 8 }}
+      onMouseEnter={place.hidden ? cancelPeek : undefined}
+      onMouseLeave={place.hidden ? endPeek : undefined}
       className={clsx(
         "absolute z-30 flex w-max items-center rounded-xl border border-white/10 bg-[#111317]/95 p-1 text-fg shadow-[0_8px_30px_rgb(0_0_0/0.5)] backdrop-blur",
         place.collapsed && p.fullscreen && "opacity-50 transition-opacity hover:opacity-100",

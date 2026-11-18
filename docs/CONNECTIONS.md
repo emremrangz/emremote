@@ -67,9 +67,14 @@ fingerprints, comma-separated, are also accepted.
   - *Low bandwidth*: 16-bit color and no effects.
 - **Keyboard layout** is detected automatically from your computer (for example Turkish Q) and
   given to the remote computer. Set a fixed layout only if the remote computer uses a different one.
+- **VNC picture:** *Automatic* quality is 8 of 9 with compression 2, sharp on a local network. Choose a lower
+  quality or a higher compression for a slow link.
+- **Dropped connections** (Wi-Fi gone for a moment, a VPN reconnecting) are retried by themselves up to three times; an
+  RDP session then returns to the same Windows session. A session ended on purpose (by you, an administrator or the
+  remote computer) is not retried.
 - **Session toolbar:** a floating bar that can be dragged, collapsed to a small pill, or hidden
-  completely. To bring a hidden bar back, point at the top edge of the screen, or press
-  **Ctrl+Alt+Shift+T**. It has zoom and fit,
+  completely. A hidden bar leaves a small arrow at the top: point at it to see the bar for a moment, click it (or press
+  **Ctrl+Alt+Shift+T**) to bring the bar back. It has zoom and fit,
   Ctrl+Alt+Del, Win+L and Win, modifier keys that stay held for the next key, navigation and arrow
   keys, files, clipboard, display settings and fullscreen. The remote desktop always fills the
   whole window. **Display → Match my monitor** sizes it to your monitor even in a smaller window, and
@@ -192,8 +197,10 @@ and adds the session as a tab. Later connects add tabs to the same window instea
 - **Layouts** (buttons at the top right): one session, two side by side, two stacked, or four panes.
   Switching to a layout with more panes fills the empty ones with sessions that were hidden.
 - **Panes and tabs.** Click a tab to show its session in the active pane (outlined when there is
-  more than one pane). Click an empty pane, then a tab, to place a session there. `+` opens a new
-  session; Quick connect is in that dialog too. Middle-click or the × closes a session and ends it.
+  more than one pane). Click an empty pane, then a tab, to place a session there. A tab shows the device's logo, name
+  and protocol; a small dot on the logo means it is connecting (amber), ended (grey) or failed (red). Drag tabs to
+  reorder them. `+` opens a new session: devices with their groups and tags, a filter by group, one button per
+  connection method; Quick connect is in that dialog too. Middle-click or the × closes a session and ends it.
 - **Keyboard.** Keys, paste and the toolbar shortcut go only to the active pane. Clicking in a pane
   makes it active. Each pane has its own toolbar, file/snippet/clipboard panels and resolution.
 - **Hidden sessions stay connected** (up to 8 at a time). Closing the window ends all of them, and

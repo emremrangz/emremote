@@ -59,9 +59,14 @@ func TestBuildGuacdParams(t *testing.T) {
 	if p["enable-drive"] != "true" || p["drive-path"] != "/transfer/dev-1" || p["drive-name"] != "emremote" {
 		t.Fatalf("rdp params: %v", p)
 	}
-	p, _ = buildGuacdParams(guacdTarget{Protocol: "vnc", Addr: addr, Port: 5900, Settings: json.RawMessage(`{"quality_level":8}`)})
-	if p["quality-level"] != "8" || p["compress-level"] != "" || p["disable-display-resize"] != "true" {
+	p, _ = buildGuacdParams(guacdTarget{Protocol: "vnc", Addr: addr, Port: 5900, Settings: json.RawMessage(`{"quality_level":3,"compress_level":9}`)})
+	if p["quality-level"] != "3" || p["compress-level"] != "9" || p["disable-display-resize"] != "true" {
 		t.Fatalf("vnc params: %v", p)
+	}
+	// Automatic picture settings are sharp ones for a local network, not the VNC library's blurry fallback.
+	p, _ = buildGuacdParams(guacdTarget{Protocol: "vnc", Addr: addr, Port: 5900, Settings: json.RawMessage(`{}`)})
+	if p["quality-level"] != "8" || p["compress-level"] != "2" {
+		t.Fatalf("vnc automatic params: %v", p)
 	}
 }
 
