@@ -44,11 +44,11 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^15.15.0",
     "knip": "^5.88.1",
-    "postcss": "8.5.32",
+    "postcss": "8.5.33",
     "tailwindcss": "3.4.19",
     "typescript": "5.9.3",
-    "typescript-eslint": "^8.72.1",
-    "vite": "7.3.7",
+    "typescript-eslint": "^8.72.2",
+    "vite": "7.3.8",
     "vitest": "4.1.12"
   },
   "packageManager": "npm@11.19.1"
